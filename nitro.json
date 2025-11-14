@@ -1,0 +1,17 @@
+{
+  "cxxNamespace": ["arcore"],
+  "ios": {
+    "iosModuleName": "ArCore"
+  },
+  "android": {
+    "androidNamespace": ["arcore"],
+    "androidCxxLibName": "arcore"
+  },
+  "autolinking": {
+    "ArCore": {
+      "swift": "ArCore",
+      "kotlin": "ArCore"
+    }
+  },
+  "ignorePaths": ["node_modules"]
+}
