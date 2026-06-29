@@ -30,6 +30,15 @@ def getExtOrIntegerDefault(name) {
   return rootProject.ext.has(name) ? rootProject.ext.get(name) : (project.properties["ArCore_" + name]).toInteger()
 }
 
+/*
+The ARCore AAR library contains native shared libraries that are
+extracted before building to a temporary directory.
+*/
+def arcore_libpath = "${buildDir}/arcore-native"
+
+// Create a configuration to mark which aars to extract .so files from
+configurations { natives }
+
 android {
   namespace "com.margelo.nitro.arcore"
 
@@ -41,8 +50,11 @@ android {
 
     externalNativeBuild {
       cmake {
-        cppFlags "-frtti -fexceptions -Wall -fstack-protector-all"
-        arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+        cppFlags "-Wall -frtti -fexceptions -fstack-protector-all"
+        arguments "-DANDROID_STL=c++_shared",
+                "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
+                "-DARCORE_LIBPATH=${arcore_libpath}/jni",
+                "-DARCORE_INCLUDE=${project.rootDir}/../../libraries/include"
         abiFilters (*reactNativeArchitectures())
 
         buildTypes {
@@ -54,12 +66,6 @@ android {
           }
         }
       }
-    }
-  }
-
-  externalNativeBuild {
-    cmake {
-      path "CMakeLists.txt"
     }
   }
 
@@ -112,6 +118,12 @@ android {
       ]
     }
   }
+
+  externalNativeBuild {
+    cmake {
+      path "CMakeLists.txt"
+    }
+  }
 }
 
 repositories {
@@ -124,5 +136,30 @@ def kotlin_version = getExtOrDefault("kotlinVersion")
 dependencies {
   implementation "com.facebook.react:react-android"
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+  implementation 'com.google.ar:core:1.33.0'
+  natives 'com.google.ar:core:1.33.0'
   implementation project(":react-native-nitro-modules")
+}
+
+// Extracts the shared libraries from AARs in the native configuration
+// so that NDK builds can access these libraries.
+task extractNativeLibraries() {
+   // Extract every time.
+   outputs.upToDateWhen { false }
+
+   doFirst {
+        configurations.natives.files.each { f ->
+            copy {
+                from zipTree(f)
+                into arcore_libpath
+                include "jni/**/*"
+            }
+        }
+    }
+}
+
+tasks.whenTaskAdded {
+    task-> if ((task.name.contains("external") || task.name.contains("CMake") || task.name.contains("cmake")) && !task.name.contains("Clean")) {
+        task.dependsOn(extractNativeLibraries)
+    }
 }

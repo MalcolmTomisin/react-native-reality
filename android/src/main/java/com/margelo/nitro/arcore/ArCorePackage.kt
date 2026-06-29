@@ -1,17 +1,19 @@
 package com.margelo.nitro.arcore
 
-import com.facebook.react.BaseReactPackage
+import android.view.View
+import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
-import com.facebook.react.module.model.ReactModuleInfoProvider
+import com.facebook.react.uimanager.ViewManager
+import com.margelo.nitro.arcore.views.HybridARViewHybridManager
 
-class ArCorePackage : BaseReactPackage() {
-    override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? {
-        return null
+class ArCorePackage : ReactPackage {
+    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
+        return emptyList()
     }
 
-    override fun getReactModuleInfoProvider(): ReactModuleInfoProvider {
-        return ReactModuleInfoProvider { HashMap() }
+    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<out View, *>> {
+        return listOf(HybridARViewHybridManager())
     }
 
     companion object {
