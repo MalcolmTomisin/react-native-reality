@@ -1,9 +1,30 @@
-import { NitroModules } from 'react-native-nitro-modules';
-import type { ArCore } from './ArCore.nitro';
-
-const ArCoreHybridObject =
-  NitroModules.createHybridObject<ArCore>('ArCore');
-
-export function multiply(a: number, b: number): number {
-  return ArCoreHybridObject.multiply(a, b);
-}
+export { ARView } from './ARView';
+export type { ARViewHandle } from './ARView';
+export { ARObject } from './ARObject';
+export { ARSceneContext } from './ARSceneContext';
+export type { ARObjectDescriptor, ARSceneContextType } from './ARSceneContext';
+export {
+  initialize,
+  isDepthModeSupported,
+  isGeospatialModeSupported,
+} from './session';
+export type {
+  ARSessionType,
+  ARDepthMode,
+  ARLightEstimationMode,
+  ARPlaneDetectionMode,
+  ARFocusMode,
+  ARShaderMode,
+  ARCameraFacing,
+  ARCameraTargetFps,
+  ARCameraDepthSensorUsage,
+  ARCloudAnchorMode,
+  ARInstantPlacementMode,
+  ARError,
+  ARTrackingStateInfo,
+  ARPlaneInfo,
+  ARAnchorResult,
+  ARHitTestResult,
+  ARViewProps,
+  ARViewMethods,
+} from './ARView.nitro';
