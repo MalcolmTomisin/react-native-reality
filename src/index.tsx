@@ -1,8 +1,11 @@
 export { ARView } from './ARView';
 export type { ARViewHandle } from './ARView';
 export { ARObject } from './ARObject';
+export { ARFaceFilter } from './ARFaceFilter';
 export { ARSceneContext } from './ARSceneContext';
-export type { ARObjectDescriptor, ARSceneContextType } from './ARSceneContext';
+export type { ARSceneContextType } from './ARSceneContext';
+export { ARFaceSceneContext } from './ARFaceSceneContext';
+export type { ARFaceSceneContextType } from './ARFaceSceneContext';
 export {
   initialize,
   isDepthModeSupported,
@@ -20,11 +23,19 @@ export type {
   ARCameraDepthSensorUsage,
   ARCloudAnchorMode,
   ARInstantPlacementMode,
+  ARVector3,
+  ARVector4,
+  ARColor,
+  ARObjectDescriptor,
+  ARFaceFilterDescriptor,
+  ARFaceAttachmentPoint,
   ARError,
   ARTrackingStateInfo,
   ARPlaneInfo,
   ARAnchorResult,
   ARHitTestResult,
+  ARFaceInfo,
+  ARBlendShapes,
   ARViewProps,
   ARViewMethods,
 } from './ARView.nitro';

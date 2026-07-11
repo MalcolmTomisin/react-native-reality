@@ -1,15 +1,5 @@
 import { createContext } from 'react';
-
-export type ARObjectDescriptor = {
-  id: string;
-  anchorId: string;
-  model: string;
-  texture?: string;
-  scale?: { x: number; y: number; z: number };
-  rotation?: { x: number; y: number; z: number; w: number };
-  color?: { r: number; g: number; b: number; a: number };
-  visible?: boolean;
-};
+import type { ARObjectDescriptor } from './ARView.nitro';
 
 export type ARSceneContextType = {
   registerObject: (desc: ARObjectDescriptor) => void;

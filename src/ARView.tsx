@@ -11,8 +11,15 @@ import {
   callback,
   type ViewConfig,
 } from 'react-native-nitro-modules';
-import type { ARViewProps, ARViewMethods, ARViewHybrid } from './ARView.nitro';
-import { ARSceneContext, type ARObjectDescriptor } from './ARSceneContext';
+import type {
+  ARViewProps,
+  ARViewMethods,
+  ARViewHybrid,
+  ARObjectDescriptor,
+  ARFaceFilterDescriptor,
+} from './ARView.nitro';
+import { ARSceneContext } from './ARSceneContext';
+import { ARFaceSceneContext } from './ARFaceSceneContext';
 
 const NativeARView = getHostComponent<ARViewProps, ARViewMethods>(
   'ARViewHybrid',
@@ -37,12 +44,19 @@ const NativeARView = getHostComponent<ARViewProps, ARViewMethods>(
       debugShowPointCloud: true,
       debugShowWorldOrigin: true,
       debugShowDepthMap: true,
-      objectsJSON: true,
+      debugShowFaceMesh: true,
+      objects: true,
+      faceFilters: true,
+      faceTextureURI: true,
       onARCoreError: true,
       onTrackingStateChange: true,
       onPlaneDetected: true,
       onPlaneUpdated: true,
       onAnchorCreated: true,
+      onFaceDetected: true,
+      onFaceUpdated: true,
+      onFaceLost: true,
+      onBlendShapesUpdate: true,
     },
   })
 );
@@ -60,7 +74,7 @@ export type ARViewHandle = {
   removeAnchor: (anchorId: string) => void;
 };
 
-type PublicARViewProps = Omit<ARViewProps, 'objectsJSON'> &
+type PublicARViewProps = Omit<ARViewProps, 'objects' | 'faceFilters'> &
   ViewProps & {
     children?: React.ReactNode;
   };
@@ -74,6 +88,10 @@ export const ARView = forwardRef<ARViewHandle, PublicARViewProps>(
       onPlaneDetected,
       onPlaneUpdated,
       onAnchorCreated,
+      onFaceDetected,
+      onFaceUpdated,
+      onFaceLost,
+      onBlendShapesUpdate,
       style,
       ...rest
     },
@@ -81,11 +99,18 @@ export const ARView = forwardRef<ARViewHandle, PublicARViewProps>(
   ) {
     const hybridRef = useRef<ARViewHybrid | null>(null);
     const objectsRef = useRef(new Map<string, ARObjectDescriptor>());
-    const [objectsJSON, setObjectsJSON] = useState('[]');
+    const [objects, setObjects] = useState<ARObjectDescriptor[]>([]);
+    const faceFiltersRef = useRef(new Map<string, ARFaceFilterDescriptor>());
+    const [faceFilters, setFaceFilters] = useState<ARFaceFilterDescriptor[]>(
+      []
+    );
 
     const flush = useCallback(() => {
-      const arr = Array.from(objectsRef.current.values());
-      setObjectsJSON(JSON.stringify(arr));
+      setObjects(Array.from(objectsRef.current.values()));
+    }, []);
+
+    const flushFaceFilters = useCallback(() => {
+      setFaceFilters(Array.from(faceFiltersRef.current.values()));
     }, []);
 
     const registerObject = useCallback(
@@ -112,6 +137,30 @@ export const ARView = forwardRef<ARViewHandle, PublicARViewProps>(
       [flush]
     );
 
+    const registerFilter = useCallback(
+      (desc: ARFaceFilterDescriptor) => {
+        faceFiltersRef.current.set(desc.id, desc);
+        flushFaceFilters();
+      },
+      [flushFaceFilters]
+    );
+
+    const updateFilter = useCallback(
+      (desc: ARFaceFilterDescriptor) => {
+        faceFiltersRef.current.set(desc.id, desc);
+        flushFaceFilters();
+      },
+      [flushFaceFilters]
+    );
+
+    const unregisterFilter = useCallback(
+      (id: string) => {
+        faceFiltersRef.current.delete(id);
+        flushFaceFilters();
+      },
+      [flushFaceFilters]
+    );
+
     useImperativeHandle(ref, () => ({
       takeSnapshot: (saveToDisk: boolean) =>
         hybridRef.current!.takeSnapshot(saveToDisk),
@@ -130,26 +179,43 @@ export const ARView = forwardRef<ARViewHandle, PublicARViewProps>(
       <ARSceneContext.Provider
         value={{ registerObject, updateObject, unregisterObject }}
       >
-        <NativeARView
-          style={style}
-          hybridRef={callback((r: ARViewHybrid) => {
-            hybridRef.current = r;
-          })}
-          {...rest}
-          objectsJSON={objectsJSON}
-          onARCoreError={onARCoreError ? callback(onARCoreError) : undefined}
-          onTrackingStateChange={
-            onTrackingStateChange ? callback(onTrackingStateChange) : undefined
-          }
-          onPlaneDetected={
-            onPlaneDetected ? callback(onPlaneDetected) : undefined
-          }
-          onPlaneUpdated={onPlaneUpdated ? callback(onPlaneUpdated) : undefined}
-          onAnchorCreated={
-            onAnchorCreated ? callback(onAnchorCreated) : undefined
-          }
-        />
-        {children}
+        <ARFaceSceneContext.Provider
+          value={{ registerFilter, updateFilter, unregisterFilter }}
+        >
+          <NativeARView
+            style={style}
+            hybridRef={callback((r: ARViewHybrid) => {
+              hybridRef.current = r;
+            })}
+            {...rest}
+            objects={objects}
+            faceFilters={faceFilters}
+            onARCoreError={onARCoreError ? callback(onARCoreError) : undefined}
+            onTrackingStateChange={
+              onTrackingStateChange
+                ? callback(onTrackingStateChange)
+                : undefined
+            }
+            onPlaneDetected={
+              onPlaneDetected ? callback(onPlaneDetected) : undefined
+            }
+            onPlaneUpdated={
+              onPlaneUpdated ? callback(onPlaneUpdated) : undefined
+            }
+            onAnchorCreated={
+              onAnchorCreated ? callback(onAnchorCreated) : undefined
+            }
+            onFaceDetected={
+              onFaceDetected ? callback(onFaceDetected) : undefined
+            }
+            onFaceUpdated={onFaceUpdated ? callback(onFaceUpdated) : undefined}
+            onFaceLost={onFaceLost ? callback(onFaceLost) : undefined}
+            onBlendShapesUpdate={
+              onBlendShapesUpdate ? callback(onBlendShapesUpdate) : undefined
+            }
+          />
+          {children}
+        </ARFaceSceneContext.Provider>
       </ARSceneContext.Provider>
     );
   }

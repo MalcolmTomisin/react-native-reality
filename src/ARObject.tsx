@@ -1,5 +1,6 @@
 import { useContext, useEffect, useId } from 'react';
-import { ARSceneContext, type ARObjectDescriptor } from './ARSceneContext';
+import { ARSceneContext } from './ARSceneContext';
+import type { ARObjectDescriptor } from './ARView.nitro';
 
 type ARObjectProps = Omit<ARObjectDescriptor, 'id'>;
 
