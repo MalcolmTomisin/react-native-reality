@@ -14,7 +14,7 @@ class HybridARView: HybridARViewHybridSpec {
     TapHandler(owner: self)
   }()
 
-  private lazy var arView: RealityKit.ARView = {
+  fileprivate lazy var arView: RealityKit.ARView = {
     let view = RealityKit.ARView(frame: .zero)
     view.session.delegate = sessionDelegate
     let tap = UITapGestureRecognizer(target: tapHandler, action: #selector(TapHandler.handleTap(_:)))
@@ -28,6 +28,9 @@ class HybridARView: HybridARViewHybridSpec {
 
   fileprivate var managedAnchors: [String: AnchorEntity] = [:]
   fileprivate var trackedPlanes: Set<UUID> = []
+  fileprivate var trackedFaces: Set<UUID> = []
+  fileprivate var faceAnchorEntity: AnchorEntity?
+  fileprivate var faceFilterEntities: [String: Entity] = [:]
   private var sessionRunning = false
 
   // MARK: - Props
@@ -67,10 +70,17 @@ class HybridARView: HybridARViewHybridSpec {
     didSet { updateDebugOptions() }
   }
   var debugShowDepthMap: Bool?
+  var debugShowFaceMesh: Bool?
 
-  var objectsJSON: String? {
+  var objects: [ARObjectDescriptor]? {
     didSet { syncObjects() }
   }
+
+  var faceFilters: [ARFaceFilterDescriptor]? {
+    didSet { syncFaceFilters() }
+  }
+
+  var faceTextureURI: String?
 
   // MARK: - Callbacks
 
@@ -79,6 +89,10 @@ class HybridARView: HybridARViewHybridSpec {
   var onPlaneDetected: ((_ plane: ARPlaneInfo) -> Void)?
   var onPlaneUpdated: ((_ plane: ARPlaneInfo) -> Void)?
   var onAnchorCreated: ((_ anchor: ARAnchorResult) -> Void)?
+  var onFaceDetected: ((_ face: ARFaceInfo) -> Void)?
+  var onFaceUpdated: ((_ face: ARFaceInfo) -> Void)?
+  var onFaceLost: ((_ faceId: String) -> Void)?
+  var onBlendShapesUpdate: ((_ shapes: ARBlendShapes) -> Void)?
 
   // MARK: - Session management
 
@@ -90,6 +104,10 @@ class HybridARView: HybridARViewHybridSpec {
     managedAnchors.values.forEach { $0.removeFromParent() }
     managedAnchors.removeAll()
     trackedPlanes.removeAll()
+    trackedFaces.removeAll()
+    faceAnchorEntity?.removeFromParent()
+    faceAnchorEntity = nil
+    faceFilterEntities.removeAll()
     runSession(options: [.removeExistingAnchors, .resetTracking])
   }
 
@@ -97,6 +115,9 @@ class HybridARView: HybridARViewHybridSpec {
     arView.session.pause()
     managedAnchors.values.forEach { $0.removeFromParent() }
     managedAnchors.removeAll()
+    faceAnchorEntity?.removeFromParent()
+    faceAnchorEntity = nil
+    faceFilterEntities.removeAll()
     sessionRunning = false
   }
 
@@ -162,20 +183,28 @@ class HybridARView: HybridARViewHybridSpec {
 
     if sessionType == .face {
       let faceConfig = ARFaceTrackingConfiguration()
+      faceConfig.isLightEstimationEnabled = true
+      if #available(iOS 16.0, *) {
+        faceConfig.maximumNumberOfTrackedFaces = 1
+      }
       config = faceConfig
     } else {
       let worldConfig = ARWorldTrackingConfiguration()
 
-      switch planeDetectionMode {
-      case .horizontal:
-        worldConfig.planeDetection = .horizontal
-      case .vertical:
-        worldConfig.planeDetection = .vertical
-      case .both:
-        worldConfig.planeDetection = [.horizontal, .vertical]
-      case .none:
-        worldConfig.planeDetection = []
-      default:
+      if let mode = planeDetectionMode {
+        switch mode {
+        case .horizontal:
+          worldConfig.planeDetection = .horizontal
+        case .vertical:
+          worldConfig.planeDetection = .vertical
+        case .both:
+          worldConfig.planeDetection = [.horizontal, .vertical]
+        case .none:
+          worldConfig.planeDetection = []
+        @unknown default:
+          worldConfig.planeDetection = [.horizontal, .vertical]
+        }
+      } else {
         worldConfig.planeDetection = [.horizontal, .vertical]
       }
 
@@ -216,7 +245,7 @@ class HybridARView: HybridARViewHybridSpec {
     return ARHitTestResult(x: Double(pos.x), y: Double(pos.y), z: Double(pos.z), hasHit: true)
   }
 
-  private static func resolveModelURL(_ model: String) -> URL? {
+  static func resolveModelURL(_ model: String) -> URL? {
     var name = model
       .replacingOccurrences(of: ".obj", with: ".usdz")
     if !name.hasSuffix(".usdz") { name += ".usdz" }
@@ -239,26 +268,8 @@ class HybridARView: HybridARViewHybridSpec {
 
   // MARK: - Object synchronization
 
-  private struct ObjectDesc: Codable {
-    let id: String
-    let anchorId: String
-    let model: String
-    let texture: String?
-    let scale: Scale?
-    let rotation: Rotation?
-    let color: String?
-    let visible: Bool?
-
-    struct Scale: Codable { let x: Float; let y: Float; let z: Float }
-    struct Rotation: Codable { let x: Float; let y: Float; let z: Float }
-  }
-
   private func syncObjects() {
-    guard let json = objectsJSON, !json.isEmpty,
-          let data = json.data(using: .utf8),
-          let descs = try? JSONDecoder().decode([ObjectDesc].self, from: data) else {
-      return
-    }
+    guard let descs = objects, !descs.isEmpty else { return }
 
     for desc in descs {
       guard let anchor = managedAnchors[desc.anchorId] else { continue }
@@ -280,13 +291,10 @@ class HybridARView: HybridARViewHybridSpec {
         entity.name = desc.id
 
         if let s = desc.scale {
-          entity.scale = SIMD3<Float>(s.x, s.y, s.z)
+          entity.scale = SIMD3<Float>(Float(s.x), Float(s.y), Float(s.z))
         }
         if let r = desc.rotation {
-          let angles = SIMD3<Float>(r.x, r.y, r.z)
-          entity.orientation = simd_quatf(angle: angles.x, axis: [1, 0, 0])
-            * simd_quatf(angle: angles.y, axis: [0, 1, 0])
-            * simd_quatf(angle: angles.z, axis: [0, 0, 1])
+          entity.orientation = simd_quatf(ix: Float(r.x), iy: Float(r.y), iz: Float(r.z), r: Float(r.w))
         }
 
         anchor.addChild(entity)
@@ -294,6 +302,88 @@ class HybridARView: HybridARViewHybridSpec {
         onARCoreError?(ARError(code: "MODEL_LOAD_FAILED", message: error.localizedDescription))
       }
     }
+  }
+
+  // MARK: - Face filter synchronization
+
+  fileprivate func syncFaceFilters() {
+    guard let descs = faceFilters, !descs.isEmpty else {
+      for (_, entity) in faceFilterEntities { entity.removeFromParent() }
+      faceFilterEntities.removeAll()
+      return
+    }
+
+    guard let faceAnchor = faceAnchorEntity else { return }
+
+    let currentIds = Set(descs.map { $0.id })
+    for (id, entity) in faceFilterEntities where !currentIds.contains(id) {
+      entity.removeFromParent()
+      faceFilterEntities.removeValue(forKey: id)
+    }
+
+    for desc in descs {
+      if let existing = faceFilterEntities[desc.id] {
+        existing.removeFromParent()
+        faceFilterEntities.removeValue(forKey: desc.id)
+      }
+      if desc.visible == false { continue }
+
+      do {
+        let entity: Entity
+        if let url = Self.resolveModelURL(desc.model) {
+          entity = try Entity.load(contentsOf: url)
+        } else {
+          let modelName = desc.model
+            .replacingOccurrences(of: ".obj", with: "")
+            .replacingOccurrences(of: ".usdz", with: "")
+          entity = try Entity.load(named: modelName)
+        }
+        entity.name = desc.id
+
+        if let s = desc.scale {
+          entity.scale = SIMD3<Float>(Float(s.x), Float(s.y), Float(s.z))
+        }
+
+        var position = SIMD3<Float>(0, 0, 0)
+        if let o = desc.offset {
+          position = SIMD3<Float>(Float(o.x), Float(o.y), Float(o.z))
+        }
+        position = position + Self.offsetForAttachmentPoint(desc.attachmentPoint)
+        entity.position = position
+
+        if let r = desc.rotation {
+          let angles = SIMD3<Float>(Float(r.x), Float(r.y), Float(r.z))
+          entity.orientation = simd_quatf(angle: angles.x, axis: [1, 0, 0])
+            * simd_quatf(angle: angles.y, axis: [0, 1, 0])
+            * simd_quatf(angle: angles.z, axis: [0, 0, 1])
+        }
+
+        faceAnchor.addChild(entity)
+        faceFilterEntities[desc.id] = entity
+      } catch {
+        onARCoreError?(ARError(code: "FACE_MODEL_LOAD_FAILED", message: error.localizedDescription))
+      }
+    }
+  }
+
+  private static func offsetForAttachmentPoint(_ point: String) -> SIMD3<Float> {
+    switch point {
+    case "forehead": return SIMD3<Float>(0, 0.08, 0.02)
+    case "noseTip": return SIMD3<Float>(0, -0.02, 0.06)
+    case "noseBridge": return SIMD3<Float>(0, 0.02, 0.05)
+    case "leftEye": return SIMD3<Float>(-0.03, 0.02, 0.04)
+    case "rightEye": return SIMD3<Float>(0.03, 0.02, 0.04)
+    case "leftEar": return SIMD3<Float>(-0.08, 0.01, -0.01)
+    case "rightEar": return SIMD3<Float>(0.08, 0.01, -0.01)
+    case "chin": return SIMD3<Float>(0, -0.07, 0.03)
+    case "mouthCenter": return SIMD3<Float>(0, -0.04, 0.04)
+    default: return SIMD3<Float>(0, 0, 0)
+    }
+  }
+
+  fileprivate func updateFaceFilterTransforms(_ faceAnchor: ARFaceAnchor) {
+    guard let anchorEntity = faceAnchorEntity else { return }
+    anchorEntity.transform = Transform(matrix: faceAnchor.transform)
   }
 }
 
@@ -344,18 +434,75 @@ private class ARSessionDelegateHandler: NSObject, ARSessionDelegate {
   func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
     guard let owner = owner else { return }
     for anchor in anchors {
-      guard let plane = anchor as? ARPlaneAnchor else { continue }
-      if owner.trackedPlanes.contains(plane.identifier) { continue }
-      owner.trackedPlanes.insert(plane.identifier)
-      owner.onPlaneDetected?(planeInfoFrom(plane))
+      if let plane = anchor as? ARPlaneAnchor {
+        if owner.trackedPlanes.contains(plane.identifier) { continue }
+        owner.trackedPlanes.insert(plane.identifier)
+        owner.onPlaneDetected?(planeInfoFrom(plane))
+      } else if let face = anchor as? ARFaceAnchor {
+        if owner.trackedFaces.contains(face.identifier) { continue }
+        owner.trackedFaces.insert(face.identifier)
+
+        let faceAnchorEntity = AnchorEntity()
+        faceAnchorEntity.transform = Transform(matrix: face.transform)
+        owner.arView.scene.addAnchor(faceAnchorEntity)
+        owner.faceAnchorEntity = faceAnchorEntity
+
+        owner.onFaceDetected?(faceInfoFrom(face))
+        emitBlendShapes(face, owner: owner)
+
+        owner.syncFaceFilters()
+      }
     }
   }
 
   func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
+    guard let owner = owner else { return }
     for anchor in anchors {
-      guard let plane = anchor as? ARPlaneAnchor else { continue }
-      owner?.onPlaneUpdated?(planeInfoFrom(plane))
+      if let plane = anchor as? ARPlaneAnchor {
+        owner.onPlaneUpdated?(planeInfoFrom(plane))
+      } else if let face = anchor as? ARFaceAnchor {
+        owner.updateFaceFilterTransforms(face)
+        owner.onFaceUpdated?(faceInfoFrom(face))
+        emitBlendShapes(face, owner: owner)
+      }
     }
+  }
+
+  func session(_ session: ARSession, didRemove anchors: [ARAnchor]) {
+    guard let owner = owner else { return }
+    for anchor in anchors {
+      if let face = anchor as? ARFaceAnchor {
+        owner.trackedFaces.remove(face.identifier)
+        owner.faceAnchorEntity?.removeFromParent()
+        owner.faceAnchorEntity = nil
+        owner.faceFilterEntities.removeAll()
+        owner.onFaceLost?(face.identifier.uuidString)
+      }
+    }
+  }
+
+  private func faceInfoFrom(_ face: ARFaceAnchor) -> ARFaceInfo {
+    let t = face.transform
+    let transform: [Double] = [
+      Double(t.columns.0.x), Double(t.columns.0.y), Double(t.columns.0.z), Double(t.columns.0.w),
+      Double(t.columns.1.x), Double(t.columns.1.y), Double(t.columns.1.z), Double(t.columns.1.w),
+      Double(t.columns.2.x), Double(t.columns.2.y), Double(t.columns.2.z), Double(t.columns.2.w),
+      Double(t.columns.3.x), Double(t.columns.3.y), Double(t.columns.3.z), Double(t.columns.3.w),
+    ]
+    return ARFaceInfo(faceId: face.identifier.uuidString, transform: transform)
+  }
+
+  private func emitBlendShapes(_ face: ARFaceAnchor, owner: HybridARView) {
+    guard owner.onBlendShapesUpdate != nil else { return }
+    var keys: [String] = []
+    var values: [Double] = []
+    keys.reserveCapacity(face.blendShapes.count)
+    values.reserveCapacity(face.blendShapes.count)
+    for (key, value) in face.blendShapes {
+      keys.append(key.rawValue)
+      values.append(value.doubleValue)
+    }
+    owner.onBlendShapesUpdate?(ARBlendShapes(faceId: face.identifier.uuidString, shapeKeys: keys, shapeValues: values))
   }
 
   private func planeInfoFrom(_ plane: ARPlaneAnchor) -> ARPlaneInfo {
