@@ -96,9 +96,10 @@ class ARAppSystem {
     external fun setShaderMode(shaderMode: String)
     external fun setDisplayRotation(rotation: Int)
 
-    external fun setARObjects(objectsJSON: String)
+    external fun setARObjects(descs: Array<ARObjectDescriptor>)
     external fun createAnchor(x: Float, y: Float): String
     external fun removeAnchor(anchorId: String)
+    external fun drainFaceEvents(): Array<FaceEvent>
 
     companion object {
         val instance: ARAppSystem by lazy {
