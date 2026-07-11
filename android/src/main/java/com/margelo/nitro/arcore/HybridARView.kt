@@ -192,21 +192,34 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
             value?.let { app.setDebugShowDepthMap(it) }
         }
 
-    override var objectsJSON: String? = null
+    override var debugShowFaceMesh: Boolean? = null
+        set(value) { field = value }
+
+    override var objects: Array<ARObjectDescriptor>? = null
         set(value) {
             field = value
-            value?.let { json ->
+            value?.let { descs ->
                 glSurfaceView.queueEvent {
-                    app.setARObjects(json)
+                    app.setARObjects(descs)
                 }
             }
         }
+
+    override var faceFilters: Array<ARFaceFilterDescriptor>? = null
+        set(value) { field = value }
+
+    override var faceTextureURI: String? = null
+        set(value) { field = value }
 
     override var onARCoreError: ((error: ARError) -> Unit)? = null
     override var onTrackingStateChange: ((state: ARTrackingStateInfo) -> Unit)? = null
     override var onPlaneDetected: ((plane: ARPlaneInfo) -> Unit)? = null
     override var onPlaneUpdated: ((plane: ARPlaneInfo) -> Unit)? = null
     override var onAnchorCreated: ((anchor: ARAnchorResult) -> Unit)? = null
+    override var onFaceDetected: ((face: ARFaceInfo) -> Unit)? = null
+    override var onFaceUpdated: ((face: ARFaceInfo) -> Unit)? = null
+    override var onFaceLost: ((faceId: String) -> Unit)? = null
+    override var onBlendShapesUpdate: ((shapes: ARBlendShapes) -> Unit)? = null
 
     // --- Methods ---
 
@@ -280,5 +293,33 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
 
     override fun onDrawFrame(gl: javax.microedition.khronos.opengles.GL10?) {
         app.onGlDrawFrame()
+        processFaceEvents()
+    }
+
+    private fun processFaceEvents() {
+        if (onFaceDetected == null && onFaceUpdated == null && onFaceLost == null) return
+
+        val events = app.drainFaceEvents()
+        if (events.isEmpty()) return
+
+        for (event in events) {
+            when (event.type) {
+                0 -> { // DETECTED
+                    mainHandler.post {
+                        onFaceDetected?.invoke(ARFaceInfo(event.faceId, event.transform))
+                    }
+                }
+                1 -> { // UPDATED
+                    mainHandler.post {
+                        onFaceUpdated?.invoke(ARFaceInfo(event.faceId, event.transform))
+                    }
+                }
+                2 -> { // LOST
+                    mainHandler.post {
+                        onFaceLost?.invoke(event.faceId)
+                    }
+                }
+            }
+        }
     }
 }

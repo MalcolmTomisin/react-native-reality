@@ -190,10 +190,32 @@ public:
             arApplication_->SetDisplayRotation(rotation);
     }
 
-    void setARObjects(facebook::jni::alias_ref<facebook::jni::JString> json)
+    void setARObjects(
+        facebook::jni::alias_ref<facebook::jni::JArrayClass<facebook::jni::JObject>> jDescs)
     {
-        if (arApplication_)
-            arApplication_->SetARObjects(json->toStdString());
+        if (!arApplication_ || !jDescs)
+            return;
+
+        std::vector<arcore::ARApplication::ARObjectDesc> descs;
+        auto size = jDescs->size();
+        descs.reserve(size);
+
+        auto cls = facebook::jni::findClassStatic("com/margelo/nitro/arcore/ARObjectDescriptor");
+        auto getId = cls->getField<facebook::jni::JString>("id");
+        auto getAnchorId = cls->getField<facebook::jni::JString>("anchorId");
+        auto getModel = cls->getField<facebook::jni::JString>("model");
+
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto obj = jDescs->getElement(i);
+            arcore::ARApplication::ARObjectDesc desc;
+            desc.id = obj->getFieldValue(getId)->toStdString();
+            desc.anchorId = obj->getFieldValue(getAnchorId)->toStdString();
+            desc.model = obj->getFieldValue(getModel)->toStdString();
+            descs.push_back(std::move(desc));
+        }
+
+        arApplication_->SetARObjects(std::move(descs));
     }
 
     facebook::jni::local_ref<facebook::jni::JString> createAnchor(jfloat x, jfloat y)
@@ -228,6 +250,39 @@ public:
     {
         if (arApplication_)
             arApplication_->DestroySession();
+    }
+
+    facebook::jni::local_ref<facebook::jni::JArrayClass<facebook::jni::JObject>> drainFaceEvents()
+    {
+        using namespace facebook::jni;
+
+        if (!arApplication_)
+        {
+            auto cls = findClassStatic("com/margelo/nitro/arcore/FaceEvent");
+            return JArrayClass<JObject>::newArray(0, cls);
+        }
+
+        auto events = arApplication_->DrainFaceEvents();
+        auto cls = findClassStatic("com/margelo/nitro/arcore/FaceEvent");
+        auto result = JArrayClass<JObject>::newArray(events.size(), cls);
+
+        auto fromCpp = cls->getStaticMethod<local_ref<JObject>(jint, local_ref<JString>, local_ref<JArrayDouble>)>("fromCpp");
+
+        for (size_t i = 0; i < events.size(); ++i)
+        {
+            const auto &e = events[i];
+            auto faceId = make_jstring(e.faceId);
+            auto transform = JArrayDouble::newArray(16);
+            JNIEnv *env = Environment::current();
+            jdouble buf[16];
+            for (int j = 0; j < 16; ++j)
+                buf[j] = static_cast<jdouble>(e.transform[j]);
+            env->SetDoubleArrayRegion(transform.get(), 0, 16, buf);
+
+            auto obj = fromCpp(cls, static_cast<jint>(e.type), faceId, transform);
+            (*result)[i] = obj;
+        }
+        return result;
     }
 
     static void registerNatives()
@@ -268,9 +323,10 @@ public:
             makeNativeMethod("onARViewMounted", "()V", ARApplicationWrapper::onARViewMounted),
             makeNativeMethod("onARViewUnmounted", "()V", ARApplicationWrapper::onARViewUnmounted),
             makeNativeMethod("destroySession", "()V", ARApplicationWrapper::destroySession),
-            makeNativeMethod("setARObjects", "(Ljava/lang/String;)V", ARApplicationWrapper::setARObjects),
+            makeNativeMethod("setARObjects", "([Lcom/margelo/nitro/arcore/ARObjectDescriptor;)V", ARApplicationWrapper::setARObjects),
             makeNativeMethod("createAnchor", "(FF)Ljava/lang/String;", ARApplicationWrapper::createAnchor),
             makeNativeMethod("removeAnchor", "(Ljava/lang/String;)V", ARApplicationWrapper::removeAnchor),
+            makeNativeMethod("drainFaceEvents", "()[Lcom/margelo/nitro/arcore/FaceEvent;", ARApplicationWrapper::drainFaceEvents),
         });
     }
 };

@@ -4,6 +4,7 @@
 #include <string>
 #include <set>
 #include <mutex>
+#include <cstring>
 #include <unordered_map>
 #include "ARSessionManager.h"
 #include "AndroidPlatformServices.h"
@@ -19,6 +20,14 @@
 
 namespace arcore
 {
+    struct FaceEvent
+    {
+        enum Type { DETECTED, UPDATED, LOST };
+        Type type;
+        std::string faceId;
+        float transform[16] = {};
+    };
+
     class ARApplication
     {
     public:
@@ -34,6 +43,15 @@ namespace arcore
             }
             ArSessionManager::Instance().Destroy();
         }
+
+        std::vector<FaceEvent> DrainFaceEvents()
+        {
+            std::lock_guard<std::mutex> lock(face_mutex_);
+            std::vector<FaceEvent> result;
+            result.swap(pending_face_events_);
+            return result;
+        }
+
         void OnPause()
         {
             activity_resumed_ = false;
@@ -63,14 +81,25 @@ namespace arcore
                 }
                 ArConfig *ar_config = nullptr;
                 ArConfig_create(ArSessionManager::Instance().Get(), &ar_config);
-                int32_t is_depth_supported = 0;
-                ArSession_isDepthModeSupported(ArSessionManager::Instance().Get(),
-                    AR_DEPTH_MODE_AUTOMATIC, &is_depth_supported);
-                if (is_depth_supported)
+
+                if (session_type_ == "face")
                 {
-                    ArConfig_setDepthMode(ArSessionManager::Instance().Get(), ar_config,
-                        AR_DEPTH_MODE_AUTOMATIC);
+                    ArConfig_setAugmentedFaceMode(ArSessionManager::Instance().Get(),
+                        ar_config, AR_AUGMENTED_FACE_MODE_MESH3D);
+                    LOGI("Configured face tracking mode");
                 }
+                else
+                {
+                    int32_t is_depth_supported = 0;
+                    ArSession_isDepthModeSupported(ArSessionManager::Instance().Get(),
+                        AR_DEPTH_MODE_AUTOMATIC, &is_depth_supported);
+                    if (is_depth_supported)
+                    {
+                        ArConfig_setDepthMode(ArSessionManager::Instance().Get(), ar_config,
+                            AR_DEPTH_MODE_AUTOMATIC);
+                    }
+                }
+
                 ArSession_configure(ArSessionManager::Instance().Get(), ar_config);
                 ArConfig_destroy(ar_config);
 
@@ -114,6 +143,10 @@ namespace arcore
         {
             ArSessionManager::Instance().Pause();
             ArSessionManager::Instance().Destroy();
+            {
+                std::lock_guard<std::mutex> lock(face_mutex_);
+                tracked_faces_.clear();
+            }
         }
 
         void OnSurfaceCreated(JNIEnv * /*env*/) {}
@@ -178,40 +211,47 @@ namespace arcore
 
             if (camera_tracking_state == AR_TRACKING_STATE_TRACKING)
             {
-                glm::mat4 view_mat;
-                glm::mat4 projection_mat;
-                ArCamera_getViewMatrix(session, ar_camera, glm::value_ptr(view_mat));
-                ArCamera_getProjectionMatrix(session, ar_camera, 0.1f, 100.f, glm::value_ptr(projection_mat));
-
-                float color_correction[4] = {1.f, 1.f, 1.f, 1.f};
-
-                std::lock_guard<std::mutex> lock(objects_mutex_);
-                for (const auto &desc : ar_object_descs_)
+                if (session_type_ == "face")
                 {
-                    if (!desc.visible)
-                        continue;
-                    auto anchor_it = managed_anchors_.find(desc.anchorId);
-                    if (anchor_it == managed_anchors_.end())
-                        continue;
+                    ProcessFaces(session);
+                }
+                else
+                {
+                    glm::mat4 view_mat;
+                    glm::mat4 projection_mat;
+                    ArCamera_getViewMatrix(session, ar_camera, glm::value_ptr(view_mat));
+                    ArCamera_getProjectionMatrix(session, ar_camera, 0.1f, 100.f, glm::value_ptr(projection_mat));
 
-                    ArTrackingState anchor_state;
-                    ArAnchor_getTrackingState(session, anchor_it->second, &anchor_state);
-                    if (anchor_state != AR_TRACKING_STATE_TRACKING)
-                        continue;
+                    float color_correction[4] = {1.f, 1.f, 1.f, 1.f};
 
-                    glm::mat4 model_mat;
-                    utils::GetTransformMatrixFromAnchor(*anchor_it->second, session, &model_mat);
-                    model_mat = glm::scale(model_mat, glm::vec3(desc.scale[0], desc.scale[1], desc.scale[2]));
-
-                    auto renderer_it = obj_renderers_.find(desc.model);
-                    if (renderer_it == obj_renderers_.end())
-                        renderer_it = obj_renderers_.find("models/" + desc.model + ".obj");
-                    if (renderer_it == obj_renderers_.end())
-                        renderer_it = obj_renderers_.find(desc.model + ".obj");
-                    if (renderer_it != obj_renderers_.end())
+                    std::lock_guard<std::mutex> lock(objects_mutex_);
+                    for (const auto &desc : ar_object_descs_)
                     {
-                        renderer_it->second->Draw(projection_mat, view_mat, model_mat,
-                                                  color_correction, desc.color);
+                        if (!desc.visible)
+                            continue;
+                        auto anchor_it = managed_anchors_.find(desc.anchorId);
+                        if (anchor_it == managed_anchors_.end())
+                            continue;
+
+                        ArTrackingState anchor_state;
+                        ArAnchor_getTrackingState(session, anchor_it->second, &anchor_state);
+                        if (anchor_state != AR_TRACKING_STATE_TRACKING)
+                            continue;
+
+                        glm::mat4 model_mat;
+                        utils::GetTransformMatrixFromAnchor(*anchor_it->second, session, &model_mat);
+                        model_mat = glm::scale(model_mat, glm::vec3(desc.scale[0], desc.scale[1], desc.scale[2]));
+
+                        auto renderer_it = obj_renderers_.find(desc.model);
+                        if (renderer_it == obj_renderers_.end())
+                            renderer_it = obj_renderers_.find("models/" + desc.model + ".obj");
+                        if (renderer_it == obj_renderers_.end())
+                            renderer_it = obj_renderers_.find(desc.model + ".obj");
+                        if (renderer_it != obj_renderers_.end())
+                        {
+                            renderer_it->second->Draw(projection_mat, view_mat, model_mat,
+                                                      color_correction, desc.color);
+                        }
                     }
                 }
             }
@@ -235,7 +275,7 @@ namespace arcore
         void SetPlaneDetectionEnabled(jboolean /*enabled*/) {}
         void SetLightEstimationEnabled(jboolean /*enabled*/) {}
 
-        void SetSessionType(const std::string & /*sessionType*/) {}
+        void SetSessionType(const std::string &sessionType) { session_type_ = sessionType; }
         void SetDepthMode(const std::string & /*depthMode*/) {}
         void SetCloudAnchorMode(const std::string & /*cloudAnchorMode*/) {}
         void SetInstantPlacementMode(const std::string & /*instantPlacementMode*/) {}
@@ -253,42 +293,8 @@ namespace arcore
             debug_show_depth_map_ = (shaderMode == "depth");
         }
 
-        void SetARObjects(const std::string &json)
+        void SetARObjects(std::vector<ARObjectDesc> new_descs)
         {
-            std::vector<ARObjectDesc> new_descs;
-            size_t pos = 0;
-            while ((pos = json.find('{', pos)) != std::string::npos)
-            {
-                ARObjectDesc desc;
-                size_t end = json.find('}', pos);
-                if (end == std::string::npos)
-                    break;
-                std::string obj = json.substr(pos, end - pos + 1);
-
-                auto extractString = [&obj](const std::string &key) -> std::string
-                {
-                    std::string search = "\"" + key + "\":\"";
-                    size_t start = obj.find(search);
-                    if (start == std::string::npos)
-                        return "";
-                    start += search.length();
-                    size_t finish = obj.find('"', start);
-                    if (finish == std::string::npos)
-                        return "";
-                    return obj.substr(start, finish - start);
-                };
-
-                desc.id = extractString("id");
-                desc.anchorId = extractString("anchorId");
-                desc.model = extractString("model");
-
-                if (!desc.id.empty() && !desc.anchorId.empty() && !desc.model.empty())
-                {
-                    new_descs.push_back(desc);
-                }
-                pos = end + 1;
-            }
-
             std::lock_guard<std::mutex> lock(objects_mutex_);
             ar_object_descs_ = std::move(new_descs);
         }
@@ -373,6 +379,102 @@ namespace arcore
         }
 
     private:
+        void ProcessFaces(ArSession *session)
+        {
+            ArTrackableList *face_list = nullptr;
+            ArTrackableList_create(session, &face_list);
+            ArSession_getAllTrackables(session, AR_TRACKABLE_FACE, face_list);
+
+            int32_t face_count = 0;
+            ArTrackableList_getSize(session, face_list, &face_count);
+
+            std::set<std::string> current_face_ids;
+
+            for (int32_t i = 0; i < face_count; ++i)
+            {
+                ArTrackable *trackable = nullptr;
+                ArTrackableList_acquireItem(session, face_list, i, &trackable);
+
+                ArTrackingState tracking_state;
+                ArTrackable_getTrackingState(session, trackable, &tracking_state);
+
+                if (tracking_state == AR_TRACKING_STATE_TRACKING)
+                {
+                    ArAugmentedFace *face = ArAsFace(trackable);
+
+                    ArPose *pose = nullptr;
+                    ArPose_create(session, nullptr, &pose);
+                    ArAugmentedFace_getCenterPose(session, face, pose);
+
+                    float pose_raw[7];
+                    ArPose_getPoseRaw(session, pose, pose_raw);
+
+                    float qx = pose_raw[0], qy = pose_raw[1], qz = pose_raw[2], qw = pose_raw[3];
+                    float tx = pose_raw[4], ty = pose_raw[5], tz = pose_raw[6];
+
+                    float transform[16];
+                    // Column-major 4x4 matrix from quaternion + translation
+                    transform[0]  = 1.f - 2.f*(qy*qy + qz*qz);
+                    transform[1]  = 2.f*(qx*qy + qw*qz);
+                    transform[2]  = 2.f*(qx*qz - qw*qy);
+                    transform[3]  = 0.f;
+                    transform[4]  = 2.f*(qx*qy - qw*qz);
+                    transform[5]  = 1.f - 2.f*(qx*qx + qz*qz);
+                    transform[6]  = 2.f*(qy*qz + qw*qx);
+                    transform[7]  = 0.f;
+                    transform[8]  = 2.f*(qx*qz + qw*qy);
+                    transform[9]  = 2.f*(qy*qz - qw*qx);
+                    transform[10] = 1.f - 2.f*(qx*qx + qy*qy);
+                    transform[11] = 0.f;
+                    transform[12] = tx;
+                    transform[13] = ty;
+                    transform[14] = tz;
+                    transform[15] = 1.f;
+
+                    char id_buf[32];
+                    snprintf(id_buf, sizeof(id_buf), "face_%p", (void *)trackable);
+                    std::string faceId(id_buf);
+                    current_face_ids.insert(faceId);
+
+                    std::lock_guard<std::mutex> lock(face_mutex_);
+                    bool is_new = tracked_faces_.find(faceId) == tracked_faces_.end();
+                    tracked_faces_.insert(faceId);
+
+                    FaceEvent event;
+                    event.type = is_new ? FaceEvent::DETECTED : FaceEvent::UPDATED;
+                    event.faceId = faceId;
+                    std::memcpy(event.transform, transform, sizeof(float) * 16);
+                    pending_face_events_.push_back(std::move(event));
+
+                    ArPose_destroy(pose);
+                }
+
+                ArTrackable_release(trackable);
+            }
+
+            // Check for lost faces
+            {
+                std::lock_guard<std::mutex> lock(face_mutex_);
+                for (auto it = tracked_faces_.begin(); it != tracked_faces_.end();)
+                {
+                    if (current_face_ids.find(*it) == current_face_ids.end())
+                    {
+                        FaceEvent lost_event;
+                        lost_event.type = FaceEvent::LOST;
+                        lost_event.faceId = *it;
+                        pending_face_events_.push_back(std::move(lost_event));
+                        it = tracked_faces_.erase(it);
+                    }
+                    else
+                    {
+                        ++it;
+                    }
+                }
+            }
+
+            ArTrackableList_destroy(face_list);
+        }
+
         std::unique_ptr<AndroidPlatformServices> platformServices_;
         int active_view_count_ = 0;
         bool activity_resumed_ = false;
@@ -388,6 +490,7 @@ namespace arcore
         int display_rotation_ = 0;
         bool is_instant_placement_enabled_ = true;
         bool debug_show_depth_map_ = false;
+        std::string session_type_;
 
         AAssetManager *const asset_manager_;
 
@@ -411,5 +514,9 @@ namespace arcore
         int anchor_counter_ = 0;
 
         int32_t plane_count_ = 0;
+
+        std::vector<FaceEvent> pending_face_events_;
+        std::set<std::string> tracked_faces_;
+        std::mutex face_mutex_;
     };
 }
