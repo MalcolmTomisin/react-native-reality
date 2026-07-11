@@ -24,6 +24,62 @@ export type ARCameraDepthSensorUsage =
 export type ARCloudAnchorMode = 'disabled' | 'enabled';
 export type ARInstantPlacementMode = 'disabled' | 'enabled';
 
+export type ARFaceAttachmentPoint =
+  | 'forehead'
+  | 'noseTip'
+  | 'noseBridge'
+  | 'leftEye'
+  | 'rightEye'
+  | 'leftEar'
+  | 'rightEar'
+  | 'chin'
+  | 'mouthCenter';
+
+// --- Shared structs ---
+
+export interface ARVector3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface ARVector4 {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+}
+
+export interface ARColor {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+// --- Descriptor structs (JS → Native) ---
+
+export interface ARObjectDescriptor {
+  id: string;
+  anchorId: string;
+  model: string;
+  texture?: string;
+  scale?: ARVector3;
+  rotation?: ARVector4;
+  color?: ARColor;
+  visible?: boolean;
+}
+
+export interface ARFaceFilterDescriptor {
+  id: string;
+  attachmentPoint: string;
+  model: string;
+  scale?: ARVector3;
+  offset?: ARVector3;
+  rotation?: ARVector3;
+  visible?: boolean;
+}
+
 // --- Event data structs ---
 
 export interface ARError {
@@ -60,6 +116,17 @@ export interface ARHitTestResult {
   hasHit: boolean;
 }
 
+export interface ARFaceInfo {
+  faceId: string;
+  transform: number[];
+}
+
+export interface ARBlendShapes {
+  faceId: string;
+  shapeKeys: string[];
+  shapeValues: number[];
+}
+
 // --- View Props ---
 
 export interface ARViewProps extends HybridViewProps {
@@ -79,13 +146,20 @@ export interface ARViewProps extends HybridViewProps {
   debugShowPointCloud?: boolean;
   debugShowWorldOrigin?: boolean;
   debugShowDepthMap?: boolean;
-  objectsJSON?: string;
+  debugShowFaceMesh?: boolean;
+  objects?: ARObjectDescriptor[];
+  faceFilters?: ARFaceFilterDescriptor[];
+  faceTextureURI?: string;
 
   onARCoreError?: (error: ARError) => void;
   onTrackingStateChange?: (state: ARTrackingStateInfo) => void;
   onPlaneDetected?: (plane: ARPlaneInfo) => void;
   onPlaneUpdated?: (plane: ARPlaneInfo) => void;
   onAnchorCreated?: (anchor: ARAnchorResult) => void;
+  onFaceDetected?: (face: ARFaceInfo) => void;
+  onFaceUpdated?: (face: ARFaceInfo) => void;
+  onFaceLost?: (faceId: string) => void;
+  onBlendShapesUpdate?: (shapes: ARBlendShapes) => void;
 }
 
 // --- View Methods ---
