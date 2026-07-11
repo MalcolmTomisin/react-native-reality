@@ -43,6 +43,9 @@ export default function App() {
           }
         }
       );
+    } else {
+      setHasPermission(true);
+      arViewRef.current?.cameraPermissionGranted();
     }
   }, []);
 
@@ -110,8 +113,7 @@ export default function App() {
           <ARObject
             key={anchor.anchorId}
             anchorId={anchor.anchorId}
-            model="models/andy.obj"
-            texture="models/andy.png"
+            model="andy"
             scale={{ x: 0.1, y: 0.1, z: 0.1 }}
           />
         ))}

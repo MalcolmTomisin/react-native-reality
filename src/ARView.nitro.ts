@@ -16,7 +16,7 @@ export type ARPlaneDetectionMode = 'horizontal' | 'vertical' | 'both' | 'none';
 export type ARFocusMode = 'auto' | 'fixed';
 export type ARShaderMode = 'camera' | 'depth';
 export type ARCameraFacing = 'back' | 'front';
-export type ARCameraTargetFps = '30' | '60';
+export type ARCameraTargetFps = 'fps30' | 'fps60';
 export type ARCameraDepthSensorUsage =
   | 'doNotUse'
   | 'useIfAvailable'
@@ -105,5 +105,5 @@ export interface ARViewMethods extends HybridViewMethods {
 export type ARViewHybrid = HybridView<
   ARViewProps,
   ARViewMethods,
-  { android: 'kotlin' }
+  { android: 'kotlin'; ios: 'swift' }
 >;

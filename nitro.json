@@ -12,7 +12,8 @@
       "cpp": "HybridCrossPlatformArCore"
     },
     "ARViewHybrid": {
-      "kotlin": "HybridARView"
+      "kotlin": "HybridARView",
+      "swift": "HybridARView"
     }
   },
   "ignorePaths": ["node_modules"]
