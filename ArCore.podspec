@@ -10,14 +10,19 @@ Pod::Spec.new do |s|
   s.license      = package["license"]
   s.authors      = package["author"]
 
-  s.platforms    = { :ios => min_ios_version_supported }
+  s.platforms    = { :ios => '14.0' }
   s.source       = { :git => "https://github.com/MalcolmTomisin/react-native-ar-core.git", :tag => "#{s.version}" }
+  s.frameworks   = 'ARKit', 'RealityKit'
 
   s.source_files = [
     "ios/**/*.{swift}",
     "ios/**/*.{m,mm}",
-    "cpp/**/*.{hpp,cpp}",
+    "cpp/HybridCrossPlatformArCore.{hpp,cpp}",
   ]
+
+  s.resource_bundles = {
+    'ArCoreAssets' => ['ios/Assets/**/*.{usdz,png,jpg}']
+  }
 
   s.dependency 'React-jsi'
   s.dependency 'React-callinvoker'

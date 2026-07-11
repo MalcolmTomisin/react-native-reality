@@ -204,6 +204,10 @@ namespace arcore
                     model_mat = glm::scale(model_mat, glm::vec3(desc.scale[0], desc.scale[1], desc.scale[2]));
 
                     auto renderer_it = obj_renderers_.find(desc.model);
+                    if (renderer_it == obj_renderers_.end())
+                        renderer_it = obj_renderers_.find("models/" + desc.model + ".obj");
+                    if (renderer_it == obj_renderers_.end())
+                        renderer_it = obj_renderers_.find(desc.model + ".obj");
                     if (renderer_it != obj_renderers_.end())
                     {
                         renderer_it->second->Draw(projection_mat, view_mat, model_mat,
