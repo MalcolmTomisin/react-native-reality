@@ -2,6 +2,7 @@ import React, {
   forwardRef,
   useCallback,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -20,6 +21,8 @@ import type {
 } from './ARView.nitro';
 import { ARSceneContext } from './ARSceneContext';
 import { ARFaceSceneContext } from './ARFaceSceneContext';
+
+const noop = (() => {}) as (...args: any[]) => void;
 
 const NativeARView = getHostComponent<ARViewProps, ARViewMethods>(
   'ARViewHybrid',
@@ -48,11 +51,13 @@ const NativeARView = getHostComponent<ARViewProps, ARViewMethods>(
       objects: true,
       faceFilters: true,
       faceTextureURI: true,
+      onSessionStateChange: true,
       onARCoreError: true,
       onTrackingStateChange: true,
       onPlaneDetected: true,
       onPlaneUpdated: true,
       onAnchorCreated: true,
+      onTap: true,
       onFaceDetected: true,
       onFaceUpdated: true,
       onFaceLost: true,
@@ -83,16 +88,36 @@ export const ARView = forwardRef<ARViewHandle, PublicARViewProps>(
   function ARView(
     {
       children,
+      onSessionStateChange,
       onARCoreError,
       onTrackingStateChange,
       onPlaneDetected,
       onPlaneUpdated,
       onAnchorCreated,
+      onTap,
       onFaceDetected,
       onFaceUpdated,
       onFaceLost,
       onBlendShapesUpdate,
       style,
+      sessionType = 'world',
+      depthMode = 'disabled',
+      lightEstimationMode = 'disabled',
+      planeDetectionMode = 'none',
+      focusMode = 'auto',
+      shaderMode = 'camera',
+      cloudAnchorMode = 'disabled',
+      instantPlacementMode = 'disabled',
+      paused = false,
+      debugShowPlanes = false,
+      debugShowPointCloud = false,
+      debugShowWorldOrigin = false,
+      debugShowDepthMap = false,
+      debugShowFaceMesh = false,
+      faceTextureURI,
+      cameraFacing = 'back',
+      cameraTargetFps = 'fps30',
+      cameraDepthSensorUsage = 'doNotUse',
       ...rest
     },
     ref
@@ -163,56 +188,117 @@ export const ARView = forwardRef<ARViewHandle, PublicARViewProps>(
 
     useImperativeHandle(ref, () => ({
       takeSnapshot: (saveToDisk: boolean) =>
-        hybridRef.current!.takeSnapshot(saveToDisk),
-      resetSession: () => hybridRef.current!.resetSession(),
-      destroySession: () => hybridRef.current!.destroySession(),
+        hybridRef.current?.takeSnapshot(saveToDisk) ?? Promise.resolve(''),
+      resetSession: () => hybridRef.current?.resetSession(),
+      destroySession: () => hybridRef.current?.destroySession(),
       cameraPermissionGranted: () =>
-        hybridRef.current!.cameraPermissionGranted(),
-      hitTest: (x: number, y: number) => hybridRef.current!.hitTest(x, y),
+        hybridRef.current?.cameraPermissionGranted(),
+      hitTest: (x: number, y: number) =>
+        hybridRef.current?.hitTest(x, y) ??
+        Promise.resolve({ x, y, z: 0, hasHit: false }),
       createAnchor: (x: number, y: number) =>
-        hybridRef.current!.createAnchor(x, y),
+        hybridRef.current?.createAnchor(x, y) ?? Promise.resolve(''),
       removeAnchor: (anchorId: string) =>
-        hybridRef.current!.removeAnchor(anchorId),
+        hybridRef.current?.removeAnchor(anchorId),
     }));
 
+    const hybridRefCb = useMemo(
+      () =>
+        callback((r: ARViewHybrid) => {
+          hybridRef.current = r;
+        }),
+      []
+    );
+
+    const cbSessionStateChange = useMemo(
+      () => callback(onSessionStateChange ?? noop),
+      [onSessionStateChange]
+    );
+    const cbARCoreError = useMemo(
+      () => callback(onARCoreError ?? noop),
+      [onARCoreError]
+    );
+    const cbTrackingStateChange = useMemo(
+      () => callback(onTrackingStateChange ?? noop),
+      [onTrackingStateChange]
+    );
+    const cbPlaneDetected = useMemo(
+      () => callback(onPlaneDetected ?? noop),
+      [onPlaneDetected]
+    );
+    const cbPlaneUpdated = useMemo(
+      () => callback(onPlaneUpdated ?? noop),
+      [onPlaneUpdated]
+    );
+    const cbAnchorCreated = useMemo(
+      () => callback(onAnchorCreated ?? noop),
+      [onAnchorCreated]
+    );
+    const cbTap = useMemo(() => callback(onTap ?? noop), [onTap]);
+    const cbFaceDetected = useMemo(
+      () => callback(onFaceDetected ?? noop),
+      [onFaceDetected]
+    );
+    const cbFaceUpdated = useMemo(
+      () => callback(onFaceUpdated ?? noop),
+      [onFaceUpdated]
+    );
+    const cbFaceLost = useMemo(
+      () => callback(onFaceLost ?? noop),
+      [onFaceLost]
+    );
+    const cbBlendShapesUpdate = useMemo(
+      () => callback(onBlendShapesUpdate ?? noop),
+      [onBlendShapesUpdate]
+    );
+
+    const sceneCtx = useMemo(
+      () => ({ registerObject, updateObject, unregisterObject }),
+      [registerObject, updateObject, unregisterObject]
+    );
+    const faceSceneCtx = useMemo(
+      () => ({ registerFilter, updateFilter, unregisterFilter }),
+      [registerFilter, updateFilter, unregisterFilter]
+    );
+
     return (
-      <ARSceneContext.Provider
-        value={{ registerObject, updateObject, unregisterObject }}
-      >
-        <ARFaceSceneContext.Provider
-          value={{ registerFilter, updateFilter, unregisterFilter }}
-        >
+      <ARSceneContext.Provider value={sceneCtx}>
+        <ARFaceSceneContext.Provider value={faceSceneCtx}>
           <NativeARView
             style={style}
-            hybridRef={callback((r: ARViewHybrid) => {
-              hybridRef.current = r;
-            })}
+            hybridRef={hybridRefCb}
+            sessionType={sessionType}
+            depthMode={depthMode}
+            lightEstimationMode={lightEstimationMode}
+            planeDetectionMode={planeDetectionMode}
+            focusMode={focusMode}
+            shaderMode={shaderMode}
+            cloudAnchorMode={cloudAnchorMode}
+            instantPlacementMode={instantPlacementMode}
+            paused={paused}
+            debugShowPlanes={debugShowPlanes}
+            debugShowPointCloud={debugShowPointCloud}
+            debugShowWorldOrigin={debugShowWorldOrigin}
+            debugShowDepthMap={debugShowDepthMap}
+            debugShowFaceMesh={debugShowFaceMesh}
+            faceTextureURI={faceTextureURI}
+            cameraFacing={cameraFacing}
+            cameraTargetFps={cameraTargetFps}
+            cameraDepthSensorUsage={cameraDepthSensorUsage}
             {...rest}
             objects={objects}
             faceFilters={faceFilters}
-            onARCoreError={onARCoreError ? callback(onARCoreError) : undefined}
-            onTrackingStateChange={
-              onTrackingStateChange
-                ? callback(onTrackingStateChange)
-                : undefined
-            }
-            onPlaneDetected={
-              onPlaneDetected ? callback(onPlaneDetected) : undefined
-            }
-            onPlaneUpdated={
-              onPlaneUpdated ? callback(onPlaneUpdated) : undefined
-            }
-            onAnchorCreated={
-              onAnchorCreated ? callback(onAnchorCreated) : undefined
-            }
-            onFaceDetected={
-              onFaceDetected ? callback(onFaceDetected) : undefined
-            }
-            onFaceUpdated={onFaceUpdated ? callback(onFaceUpdated) : undefined}
-            onFaceLost={onFaceLost ? callback(onFaceLost) : undefined}
-            onBlendShapesUpdate={
-              onBlendShapesUpdate ? callback(onBlendShapesUpdate) : undefined
-            }
+            onSessionStateChange={cbSessionStateChange}
+            onARCoreError={cbARCoreError}
+            onTrackingStateChange={cbTrackingStateChange}
+            onPlaneDetected={cbPlaneDetected}
+            onPlaneUpdated={cbPlaneUpdated}
+            onAnchorCreated={cbAnchorCreated}
+            onTap={cbTap}
+            onFaceDetected={cbFaceDetected}
+            onFaceUpdated={cbFaceUpdated}
+            onFaceLost={cbFaceLost}
+            onBlendShapesUpdate={cbBlendShapesUpdate}
           />
           {children}
         </ARFaceSceneContext.Provider>
