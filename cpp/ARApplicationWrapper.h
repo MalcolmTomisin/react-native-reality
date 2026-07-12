@@ -415,6 +415,12 @@ public:
         return arApplication_ && arApplication_->IsSessionInitialized() ? JNI_TRUE : JNI_FALSE;
     }
 
+    facebook::jni::local_ref<facebook::jni::JString> getActiveSessionType()
+    {
+        std::string type = arApplication_ ? arApplication_->GetSessionType() : "";
+        return facebook::jni::make_jstring(type);
+    }
+
     static void registerNatives()
     {
         registerHybrid({
@@ -459,6 +465,7 @@ public:
             makeNativeMethod("removeAnchor", "(Ljava/lang/String;)V", ARApplicationWrapper::removeAnchor),
             makeNativeMethod("drainEvents", "()[Lcom/margelo/nitro/arcore/AREvent;", ARApplicationWrapper::drainEvents),
             makeNativeMethod("isSessionInitialized", "()Z", ARApplicationWrapper::isSessionInitialized),
+            makeNativeMethod("getActiveSessionType", "()Ljava/lang/String;", ARApplicationWrapper::getActiveSessionType),
             makeNativeMethod("setFaceFilters", "([Lcom/margelo/nitro/arcore/ARFaceFilterDescriptor;)V", ARApplicationWrapper::setFaceFilters),
         });
     }

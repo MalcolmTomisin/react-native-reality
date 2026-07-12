@@ -43,6 +43,16 @@ object ARViewRegistry {
         }
     }
 
+    /** Broadcasts the active session type ('world'/'face') to every mounted view. */
+    fun emitSessionType(type: String) {
+        val snapshot: List<HybridARView> = synchronized(this) { views.toList() }
+        snapshot.forEach { view ->
+            view.view.post {
+                view.onSessionTypeChange?.invoke(type)
+            }
+        }
+    }
+
     /** Pauses GL rendering on every mounted view (app going to background). */
     fun pauseGl() {
         val snapshot: List<HybridARView> = synchronized(this) { views.toList() }

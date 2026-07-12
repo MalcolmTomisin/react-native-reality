@@ -20,6 +20,7 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val app = ARAppSystem.instance
+    private var viewAttached = false
 
     init {
         CurrentActivityTracker.register(reactContext.applicationContext as android.app.Application)
@@ -58,6 +59,10 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
                 override fun onDown(e: MotionEvent): Boolean = true
 
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
+                    // Hit-testing/anchoring is world-only; ignore AR-surface taps in
+                    // face sessions. Overlay buttons are separate RN views and keep
+                    // receiving touches regardless.
+                    if (sessionType == ARSessionType.FACE) return true
                     val x = e.x
                     val y = e.y
                     // The tap is handled natively on the GL thread; it emits a TAP
@@ -82,6 +87,7 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
                 }
                 container.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                     override fun onViewAttachedToWindow(v: View) {
+                        viewAttached = true
                         ARViewRegistry.register(this@HybridARView)
                         app.onARViewMounted()
 
@@ -93,6 +99,7 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
                     }
 
                     override fun onViewDetachedFromWindow(v: View) {
+                        viewAttached = false
                         app.onARViewUnmounted()
                         ARViewRegistry.unregister(this@HybridARView)
                     }
@@ -105,8 +112,10 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
 
     override var sessionType: ARSessionType? = null
         set(value) {
+            val changed = field != value
             field = value
             value?.let { app.setSessionType(it.name) }
+            if (changed) scheduleReconfigure()
         }
 
     override var depthMode: ARDepthMode? = null
@@ -141,8 +150,10 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
 
     override var cameraFacing: ARCameraFacing? = null
         set(value) {
+            val changed = field != value
             field = value
             value?.let { app.setCameraFacing(it.name) }
+            if (changed) scheduleReconfigure()
         }
 
     override var cameraTargetFps: ARCameraTargetFps? = null
@@ -220,6 +231,7 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
         set(value) { field = value }
 
     override var onSessionStateChange: ((state: String) -> Unit)? = null
+    override var onSessionTypeChange: ((type: String) -> Unit)? = null
     override var onARCoreError: ((error: ARError) -> Unit)? = null
     override var onTrackingStateChange: ((state: ARTrackingStateInfo) -> Unit)? = null
     override var onPlaneDetected: ((plane: ARPlaneInfo) -> Unit)? = null
@@ -261,8 +273,38 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
         app.onResume(activity.applicationContext, activity)
     }
 
+    // Recreates the session when the augmentation type or camera facing changes at
+    // runtime, so the new camera config takes effect. Mirrors the proven
+    // background/foreground path (AppLifecycleListener): cycle the GLSurfaceView
+    // around the session swap so the new camera binds to the background texture —
+    // a bare GL-thread recreate leaves the feed dark/flashing. Runs on the main
+    // thread (GLSurfaceView.onPause/onResume are UI-thread calls; onPause() blocks
+    // until the render thread stops, so the swap can't race onGlDrawFrame). No-ops
+    // until a session exists and while detached; debounced so a sessionType +
+    // cameraFacing change in the same JS commit triggers a single recreate.
+    private val reconfigure = Runnable {
+        if (!viewAttached || !app.isSessionInitialized()) return@Runnable
+        val activity = reactContext.currentActivity
+            ?: CurrentActivityTracker.getCurrentActivity() ?: return@Runnable
+        val appCtx = activity.applicationContext
+        onSessionStateChange?.invoke("initializing")
+        glSurfaceView.onPause()
+        app.destroySession()
+        app.onResume(appCtx, activity)
+        glSurfaceView.onResume()
+    }
+
+    private fun scheduleReconfigure() {
+        mainHandler.removeCallbacks(reconfigure)
+        mainHandler.post(reconfigure)
+    }
+
     override fun hitTest(x: Double, y: Double): Promise<ARHitTestResult> {
         return Promise.async {
+            // Hit-testing is world-only.
+            if (sessionType == ARSessionType.FACE) {
+                return@async ARHitTestResult(x, y, 0.0, false)
+            }
             val anchorId = app.createAnchor(x.toFloat(), y.toFloat())
             if (anchorId.isNotEmpty()) {
                 app.removeAnchor(anchorId)
@@ -275,6 +317,10 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
 
     override fun createAnchor(x: Double, y: Double): Promise<String> {
         return Promise.async {
+            // Anchoring is world-only.
+            if (sessionType == ARSessionType.FACE) {
+                return@async ""
+            }
             app.createAnchor(x.toFloat(), y.toFloat())
         }
     }
