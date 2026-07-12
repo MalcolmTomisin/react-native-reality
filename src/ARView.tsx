@@ -52,6 +52,7 @@ const NativeARView = getHostComponent<ARViewProps, ARViewMethods>(
       faceFilters: true,
       faceTextureURI: true,
       onSessionStateChange: true,
+      onSessionTypeChange: true,
       onARCoreError: true,
       onTrackingStateChange: true,
       onPlaneDetected: true,
@@ -89,6 +90,7 @@ export const ARView = forwardRef<ARViewHandle, PublicARViewProps>(
     {
       children,
       onSessionStateChange,
+      onSessionTypeChange,
       onARCoreError,
       onTrackingStateChange,
       onPlaneDetected,
@@ -214,6 +216,10 @@ export const ARView = forwardRef<ARViewHandle, PublicARViewProps>(
       () => callback(onSessionStateChange ?? noop),
       [onSessionStateChange]
     );
+    const cbSessionTypeChange = useMemo(
+      () => callback(onSessionTypeChange ?? noop),
+      [onSessionTypeChange]
+    );
     const cbARCoreError = useMemo(
       () => callback(onARCoreError ?? noop),
       [onARCoreError]
@@ -289,6 +295,7 @@ export const ARView = forwardRef<ARViewHandle, PublicARViewProps>(
             objects={objects}
             faceFilters={faceFilters}
             onSessionStateChange={cbSessionStateChange}
+            onSessionTypeChange={cbSessionTypeChange}
             onARCoreError={cbARCoreError}
             onTrackingStateChange={cbTrackingStateChange}
             onPlaneDetected={cbPlaneDetected}
