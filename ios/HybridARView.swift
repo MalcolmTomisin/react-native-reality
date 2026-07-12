@@ -42,7 +42,9 @@ class HybridARView: HybridARViewHybridSpec {
 
   // MARK: - Props
 
-  var sessionType: ARSessionType?
+  var sessionType: ARSessionType? {
+    didSet { if oldValue != sessionType, sessionRunning { runSession() } }
+  }
   var depthMode: ARDepthMode?
   var lightEstimationMode: ARLightEstimationMode?
   var focusMode: ARFocusMode?
@@ -94,6 +96,7 @@ class HybridARView: HybridARViewHybridSpec {
   // MARK: - Callbacks
 
   var onSessionStateChange: ((_ state: String) -> Void)?
+  var onSessionTypeChange: ((_ type: String) -> Void)?
   var onARCoreError: ((_ error: ARError) -> Void)?
   var onTrackingStateChange: ((_ state: ARTrackingStateInfo) -> Void)?
   var onPlaneDetected: ((_ plane: ARPlaneInfo) -> Void)?
@@ -197,7 +200,10 @@ class HybridARView: HybridARViewHybridSpec {
 
   /// Handles a screen tap: always emits `onTap` (so JS sees every tap, even misses);
   /// additionally creates an anchor + emits `onAnchorCreated` on a surface hit.
+  /// Hit-testing is world-only, so the AR view ignores taps in face sessions
+  /// (overlay buttons are separate views and keep receiving touches).
   fileprivate func handleScreenTap(x: Double, y: Double) {
+    if sessionType == .face { return }
     let result = performRaycast(x: x, y: y)
     var anchorId: String? = nil
     if result.hasHit {
@@ -247,6 +253,7 @@ class HybridARView: HybridARViewHybridSpec {
     onSessionStateChange?("initializing")
 
     let config: ARConfiguration
+    let usedFaceConfig: Bool
 
     let useFrontCamera = sessionType == .face || cameraFacing == .front
     if useFrontCamera && ARFaceTrackingConfiguration.isSupported {
@@ -256,6 +263,7 @@ class HybridARView: HybridARViewHybridSpec {
         faceConfig.maximumNumberOfTrackedFaces = 1
       }
       config = faceConfig
+      usedFaceConfig = true
     } else {
       let worldConfig = ARWorldTrackingConfiguration()
 
@@ -289,11 +297,15 @@ class HybridARView: HybridARViewHybridSpec {
       worldConfig.isLightEstimationEnabled = lightEstimationMode != .disabled
 
       config = worldConfig
+      usedFaceConfig = false
     }
 
     arView.session.run(config, options: options)
     sessionRunning = true
     onSessionStateChange?("ready")
+    // Report the type the session actually came up with (captures a face->world
+    // fallback on devices without face tracking).
+    onSessionTypeChange?(usedFaceConfig ? "face" : "world")
   }
 
   private func updateDebugOptions() {
