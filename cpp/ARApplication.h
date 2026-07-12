@@ -172,6 +172,13 @@ namespace arcore
                 {
                     ArConfig_setAugmentedFaceMode(ArSessionManager::Instance().Get(),
                         ar_config, AR_AUGMENTED_FACE_MODE_MESH3D);
+                    // Front-camera augmented-face sessions do not support plane
+                    // finding or depth; leaving them enabled makes ArSession_configure
+                    // fail (unsupported config), which silently disables face mode.
+                    ArConfig_setPlaneFindingMode(ArSessionManager::Instance().Get(),
+                        ar_config, AR_PLANE_FINDING_MODE_DISABLED);
+                    ArConfig_setDepthMode(ArSessionManager::Instance().Get(),
+                        ar_config, AR_DEPTH_MODE_DISABLED);
                     LOGI("Configured face tracking mode");
                 }
                 else
@@ -196,7 +203,10 @@ namespace arcore
                         ar_config, plane_mode);
                 }
 
-                ArSession_configure(ArSessionManager::Instance().Get(), ar_config);
+                if (ArSession_configure(ArSessionManager::Instance().Get(), ar_config) != AR_SUCCESS)
+                {
+                    LOGE("ArSession_configure failed for session_type=%s", session_type_.c_str());
+                }
                 ArConfig_destroy(ar_config);
 
                 ArSession_setDisplayGeometry(ArSessionManager::Instance().Get(), display_rotation_, width_, height_);
@@ -267,6 +277,9 @@ namespace arcore
             return ArSessionManager::Instance().IsInitialized();
         }
 
+        // The session type the live session was configured with ("world"/"face").
+        std::string GetSessionType() { return session_type_; }
+
         void OnSurfaceCreated(JNIEnv * /*env*/) {}
         void OnSurfaceChanged(jint /*width*/, jint /*height*/) {}
         void OnSurfaceDestroyed() {}
@@ -313,11 +326,15 @@ namespace arcore
                 return;
             }
 
-            int32_t is_depth_supported = 0;
-            ArSession_isDepthModeSupported(session, AR_DEPTH_MODE_AUTOMATIC, &is_depth_supported);
-            if (is_depth_supported)
+            // Depth is world-only; the front-camera face session has no depth image.
+            if (session_type_ != "face")
             {
-                depth_texture_.UpdateWithDepthImageOnGlThread(*session, *ar_frame_);
+                int32_t is_depth_supported = 0;
+                ArSession_isDepthModeSupported(session, AR_DEPTH_MODE_AUTOMATIC, &is_depth_supported);
+                if (is_depth_supported)
+                {
+                    depth_texture_.UpdateWithDepthImageOnGlThread(*session, *ar_frame_);
+                }
             }
 
             ArCamera *ar_camera;
@@ -334,17 +351,19 @@ namespace arcore
             }
             EmitTrackingStateIfChanged(camera_tracking_state, failure_reason);
 
-            if (camera_tracking_state == AR_TRACKING_STATE_TRACKING)
+            if (session_type_ == "face")
             {
-                if (session_type_ == "face")
-                {
-                    glm::mat4 view_mat;
-                    glm::mat4 projection_mat;
-                    ArCamera_getViewMatrix(session, ar_camera, glm::value_ptr(view_mat));
-                    ArCamera_getProjectionMatrix(session, ar_camera, 0.1f, 100.f, glm::value_ptr(projection_mat));
-                    ProcessFaces(session, view_mat, projection_mat);
-                }
-                else
+                // Augmented Faces performs no world/motion tracking, so the ArCamera
+                // tracking state stays PAUSED ("limited"). Process faces every frame
+                // regardless — ProcessFaces checks each face's own tracking state.
+                glm::mat4 view_mat;
+                glm::mat4 projection_mat;
+                ArCamera_getViewMatrix(session, ar_camera, glm::value_ptr(view_mat));
+                ArCamera_getProjectionMatrix(session, ar_camera, 0.1f, 100.f, glm::value_ptr(projection_mat));
+                ProcessFaces(session, view_mat, projection_mat);
+            }
+            else if (camera_tracking_state == AR_TRACKING_STATE_TRACKING)
+            {
                 {
                     glm::mat4 view_mat;
                     glm::mat4 projection_mat;

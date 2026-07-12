@@ -68,6 +68,7 @@ class ARAppSystem {
 
         if (shouldCheckPermission && hasCameraPermission) {
             if (isSessionInitialized()) {
+                ARViewRegistry.emitSessionType(getActiveSessionType())
                 ARViewRegistry.emitSessionState("ready")
             } else {
                 ARViewRegistry.emitSessionState("failed")
@@ -116,6 +117,7 @@ class ARAppSystem {
     external fun removeAnchor(anchorId: String)
     external fun drainEvents(): Array<AREvent>
     external fun isSessionInitialized(): Boolean
+    external fun getActiveSessionType(): String
 
     companion object {
         val instance: ARAppSystem by lazy {
