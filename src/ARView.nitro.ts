@@ -165,6 +165,8 @@ export interface ARViewProps extends HybridViewProps {
 
   /** Fires on session lifecycle transitions. `state` is a canonical `ARSessionState`. */
   onSessionStateChange?: (state: string) => void;
+  /** Fires when a session (re)configures, reporting the active `ARSessionType` ('world' | 'face'). */
+  onSessionTypeChange?: (type: string) => void;
   onARCoreError?: (error: ARError) => void;
   onTrackingStateChange?: (state: ARTrackingStateInfo) => void;
   onPlaneDetected?: (plane: ARPlaneInfo) => void;
