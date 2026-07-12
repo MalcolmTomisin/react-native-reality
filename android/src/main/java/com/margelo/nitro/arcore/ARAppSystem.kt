@@ -59,7 +59,20 @@ class ARAppSystem {
             ARViewRegistry.emitCameraPermissionDenied()
         }
 
+        val wasInitialized = isSessionInitialized()
+        if (shouldCheckPermission && hasCameraPermission && !wasInitialized) {
+            ARViewRegistry.emitSessionState("initializing")
+        }
+
         onResumeNative(context, activity, hasCameraPermission)
+
+        if (shouldCheckPermission && hasCameraPermission) {
+            if (isSessionInitialized()) {
+                ARViewRegistry.emitSessionState("ready")
+            } else {
+                ARViewRegistry.emitSessionState("failed")
+            }
+        }
     }
 
     external fun onARViewMounted()
@@ -87,6 +100,7 @@ class ARAppSystem {
     external fun setLightEstimationMode(lightEstimationMode: String)
     external fun setPlaneDetectionMode(planeDetectionMode: String)
     external fun setFocusMode(focusMode: String)
+    external fun setCameraFacing(cameraFacing: String)
 
     external fun setDebugShowPlanes(enabled: Boolean)
     external fun setDebugShowPointCloud(enabled: Boolean)
@@ -97,9 +111,11 @@ class ARAppSystem {
     external fun setDisplayRotation(rotation: Int)
 
     external fun setARObjects(descs: Array<ARObjectDescriptor>)
+    external fun setFaceFilters(descs: Array<ARFaceFilterDescriptor>)
     external fun createAnchor(x: Float, y: Float): String
     external fun removeAnchor(anchorId: String)
-    external fun drainFaceEvents(): Array<FaceEvent>
+    external fun drainEvents(): Array<AREvent>
+    external fun isSessionInitialized(): Boolean
 
     companion object {
         val instance: ARAppSystem by lazy {

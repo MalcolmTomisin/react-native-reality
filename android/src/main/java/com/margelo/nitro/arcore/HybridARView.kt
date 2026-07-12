@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.Keep
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.facebook.proguard.annotations.DoNotStrip
 import com.margelo.nitro.core.Promise
 
@@ -23,6 +24,7 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
     init {
         CurrentActivityTracker.register(reactContext.applicationContext as android.app.Application)
         app.ensureInitialized(reactContext.applicationContext)
+        registerAppLifecycleObserver(reactContext.applicationContext)
     }
 
     private val container: FrameLayout by lazy {
@@ -58,15 +60,11 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
                     val x = e.x
                     val y = e.y
+                    // The tap is handled natively on the GL thread; it emits a TAP
+                    // event (always) plus ANCHOR_CREATED (on a plane hit) through the
+                    // unified event queue, drained in processEvents().
                     glSurfaceView.queueEvent {
-                        val anchorId = app.createAnchor(x, y)
-                        if (anchorId.isNotEmpty()) {
-                            mainHandler.post {
-                                onAnchorCreated?.invoke(
-                                    ARAnchorResult(anchorId, x.toDouble(), y.toDouble(), 0.0)
-                                )
-                            }
-                        }
+                        app.onGestureTap(x, y)
                     }
                     return true
                 }
@@ -142,7 +140,10 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
         }
 
     override var cameraFacing: ARCameraFacing? = null
-        set(value) { field = value }
+        set(value) {
+            field = value
+            value?.let { app.setCameraFacing(it.name) }
+        }
 
     override var cameraTargetFps: ARCameraTargetFps? = null
         set(value) { field = value }
@@ -206,16 +207,25 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
         }
 
     override var faceFilters: Array<ARFaceFilterDescriptor>? = null
-        set(value) { field = value }
+        set(value) {
+            field = value
+            value?.let { descs ->
+                glSurfaceView.queueEvent {
+                    app.setFaceFilters(descs)
+                }
+            }
+        }
 
     override var faceTextureURI: String? = null
         set(value) { field = value }
 
+    override var onSessionStateChange: ((state: String) -> Unit)? = null
     override var onARCoreError: ((error: ARError) -> Unit)? = null
     override var onTrackingStateChange: ((state: ARTrackingStateInfo) -> Unit)? = null
     override var onPlaneDetected: ((plane: ARPlaneInfo) -> Unit)? = null
     override var onPlaneUpdated: ((plane: ARPlaneInfo) -> Unit)? = null
     override var onAnchorCreated: ((anchor: ARAnchorResult) -> Unit)? = null
+    override var onTap: ((result: ARTapResult) -> Unit)? = null
     override var onFaceDetected: ((face: ARFaceInfo) -> Unit)? = null
     override var onFaceUpdated: ((face: ARFaceInfo) -> Unit)? = null
     override var onFaceLost: ((faceId: String) -> Unit)? = null
@@ -224,11 +234,25 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
     // --- Methods ---
 
     override fun resetSession() {
+        onSessionStateChange?.invoke("destroying")
         app.destroySession()
+        onSessionStateChange?.invoke("destroyed")
     }
 
     override fun destroySession() {
+        onSessionStateChange?.invoke("destroying")
         app.destroySession()
+        onSessionStateChange?.invoke("destroyed")
+    }
+
+    /** Pauses this view's GL rendering; called from the app lifecycle observer. */
+    fun pauseGl() {
+        glSurfaceView.onPause()
+    }
+
+    /** Resumes this view's GL rendering; called from the app lifecycle observer. */
+    fun resumeGl() {
+        glSurfaceView.onResume()
     }
 
     override fun cameraPermissionGranted() {
@@ -293,33 +317,82 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
 
     override fun onDrawFrame(gl: javax.microedition.khronos.opengles.GL10?) {
         app.onGlDrawFrame()
-        processFaceEvents()
+        processEvents()
     }
 
-    private fun processFaceEvents() {
-        if (onFaceDetected == null && onFaceUpdated == null && onFaceLost == null) return
-
-        val events = app.drainFaceEvents()
+    private fun processEvents() {
+        val events = app.drainEvents()
         if (events.isEmpty()) return
 
         for (event in events) {
-            when (event.type) {
-                0 -> { // DETECTED
-                    mainHandler.post {
-                        onFaceDetected?.invoke(ARFaceInfo(event.faceId, event.transform))
-                    }
+            when (event.category) {
+                AREvent.TRACKING_STATE -> mainHandler.post {
+                    onTrackingStateChange?.invoke(
+                        ARTrackingStateInfo(event.strB, event.idA.ifEmpty { null })
+                    )
                 }
-                1 -> { // UPDATED
-                    mainHandler.post {
-                        onFaceUpdated?.invoke(ARFaceInfo(event.faceId, event.transform))
-                    }
+                AREvent.PLANE_DETECTED -> mainHandler.post {
+                    onPlaneDetected?.invoke(planeInfo(event))
                 }
-                2 -> { // LOST
-                    mainHandler.post {
-                        onFaceLost?.invoke(event.faceId)
-                    }
+                AREvent.PLANE_UPDATED -> mainHandler.post {
+                    onPlaneUpdated?.invoke(planeInfo(event))
+                }
+                AREvent.PLANE_REMOVED -> {
+                    // No JS callback yet; PLANE_REMOVED is dropped.
+                }
+                AREvent.TAP -> mainHandler.post {
+                    onTap?.invoke(
+                        ARTapResult(
+                            event.scalars[0],
+                            event.scalars[1],
+                            event.scalars[2] != 0.0,
+                            event.idA.ifEmpty { null }
+                        )
+                    )
+                }
+                AREvent.ANCHOR_CREATED -> mainHandler.post {
+                    onAnchorCreated?.invoke(
+                        ARAnchorResult(
+                            event.idA,
+                            event.scalars[0],
+                            event.scalars[1],
+                            event.scalars[2]
+                        )
+                    )
+                }
+                AREvent.FACE_DETECTED -> mainHandler.post {
+                    onFaceDetected?.invoke(ARFaceInfo(event.idA, event.transform))
+                }
+                AREvent.FACE_UPDATED -> mainHandler.post {
+                    onFaceUpdated?.invoke(ARFaceInfo(event.idA, event.transform))
+                }
+                AREvent.FACE_LOST -> mainHandler.post {
+                    onFaceLost?.invoke(event.idA)
                 }
             }
+        }
+    }
+
+    private fun planeInfo(event: AREvent): ARPlaneInfo {
+        val s = event.scalars
+        return ARPlaneInfo(
+            event.idA,
+            event.strB,
+            s[0], s[1], s[2],
+            s[3], s[4]
+        )
+    }
+
+    companion object {
+        private var lifecycleObserverRegistered = false
+
+        /** Registers the process lifecycle observer exactly once (main thread). */
+        private fun registerAppLifecycleObserver(appContext: android.content.Context) {
+            if (lifecycleObserverRegistered) return
+            lifecycleObserverRegistered = true
+            ProcessLifecycleOwner.get().lifecycle.addObserver(
+                AppLifecycleListener(appContext.applicationContext)
+            )
         }
     }
 }

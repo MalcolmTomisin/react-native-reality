@@ -178,6 +178,12 @@ public:
             arApplication_->SetDebugShowDepthMap(enabled);
     }
 
+    void setCameraFacing(facebook::jni::alias_ref<facebook::jni::JString> value)
+    {
+        if (arApplication_)
+            arApplication_->SetCameraFacing(value->toStdString());
+    }
+
     void setShaderMode(facebook::jni::alias_ref<facebook::jni::JString> value)
     {
         if (arApplication_)
@@ -196,23 +202,42 @@ public:
         if (!arApplication_ || !jDescs)
             return;
 
+        JNIEnv *env = facebook::jni::Environment::current();
+        jobjectArray rawArray = (jobjectArray)jDescs.get();
+
+        jclass cls = env->FindClass("com/margelo/nitro/arcore/ARObjectDescriptor");
+        jfieldID fId = env->GetFieldID(cls, "id", "Ljava/lang/String;");
+        jfieldID fAnchorId = env->GetFieldID(cls, "anchorId", "Ljava/lang/String;");
+        jfieldID fModel = env->GetFieldID(cls, "model", "Ljava/lang/String;");
+
+        jsize size = env->GetArrayLength(rawArray);
         std::vector<arcore::ARApplication::ARObjectDesc> descs;
-        auto size = jDescs->size();
         descs.reserve(size);
 
-        auto cls = facebook::jni::findClassStatic("com/margelo/nitro/arcore/ARObjectDescriptor");
-        auto getId = cls->getField<facebook::jni::JString>("id");
-        auto getAnchorId = cls->getField<facebook::jni::JString>("anchorId");
-        auto getModel = cls->getField<facebook::jni::JString>("model");
-
-        for (size_t i = 0; i < size; ++i)
+        for (jsize i = 0; i < size; ++i)
         {
-            auto obj = jDescs->getElement(i);
+            env->PushLocalFrame(8);
+
+            jobject obj = env->GetObjectArrayElement(rawArray, i);
             arcore::ARApplication::ARObjectDesc desc;
-            desc.id = obj->getFieldValue(getId)->toStdString();
-            desc.anchorId = obj->getFieldValue(getAnchorId)->toStdString();
-            desc.model = obj->getFieldValue(getModel)->toStdString();
+
+            auto jId = (jstring)env->GetObjectField(obj, fId);
+            const char *c = env->GetStringUTFChars(jId, nullptr);
+            desc.id = c;
+            env->ReleaseStringUTFChars(jId, c);
+
+            auto jAnchor = (jstring)env->GetObjectField(obj, fAnchorId);
+            c = env->GetStringUTFChars(jAnchor, nullptr);
+            desc.anchorId = c;
+            env->ReleaseStringUTFChars(jAnchor, c);
+
+            auto jModel = (jstring)env->GetObjectField(obj, fModel);
+            c = env->GetStringUTFChars(jModel, nullptr);
+            desc.model = c;
+            env->ReleaseStringUTFChars(jModel, c);
+
             descs.push_back(std::move(desc));
+            env->PopLocalFrame(nullptr);
         }
 
         arApplication_->SetARObjects(std::move(descs));
@@ -246,43 +271,148 @@ public:
             arApplication_->OnARViewUnmounted();
     }
 
+    void setFaceFilters(
+        facebook::jni::alias_ref<facebook::jni::JArrayClass<facebook::jni::JObject>> jDescs)
+    {
+        if (!arApplication_ || !jDescs)
+            return;
+
+        JNIEnv *env = facebook::jni::Environment::current();
+        jobjectArray rawArray = (jobjectArray)jDescs.get();
+
+        jclass descCls = env->FindClass("com/margelo/nitro/arcore/ARFaceFilterDescriptor");
+        jfieldID fId = env->GetFieldID(descCls, "id", "Ljava/lang/String;");
+        jfieldID fAttach = env->GetFieldID(descCls, "attachmentPoint", "Ljava/lang/String;");
+        jfieldID fModel = env->GetFieldID(descCls, "model", "Ljava/lang/String;");
+        jfieldID fScale = env->GetFieldID(descCls, "scale", "Lcom/margelo/nitro/arcore/ARVector3;");
+        jfieldID fOffset = env->GetFieldID(descCls, "offset", "Lcom/margelo/nitro/arcore/ARVector3;");
+        jfieldID fRotation = env->GetFieldID(descCls, "rotation", "Lcom/margelo/nitro/arcore/ARVector3;");
+        jfieldID fVisible = env->GetFieldID(descCls, "visible", "Ljava/lang/Boolean;");
+
+        jclass vec3Cls = env->FindClass("com/margelo/nitro/arcore/ARVector3");
+        jfieldID fX = env->GetFieldID(vec3Cls, "x", "D");
+        jfieldID fY = env->GetFieldID(vec3Cls, "y", "D");
+        jfieldID fZ = env->GetFieldID(vec3Cls, "z", "D");
+
+        jclass boolCls = env->FindClass("java/lang/Boolean");
+        jmethodID boolValue = env->GetMethodID(boolCls, "booleanValue", "()Z");
+
+        jsize size = env->GetArrayLength(rawArray);
+        std::vector<arcore::ARApplication::FaceFilterDesc> descs;
+        descs.reserve(size);
+
+        for (jsize i = 0; i < size; ++i)
+        {
+            env->PushLocalFrame(16);
+
+            jobject obj = env->GetObjectArrayElement(rawArray, i);
+            arcore::ARApplication::FaceFilterDesc desc;
+
+            auto jId = (jstring)env->GetObjectField(obj, fId);
+            const char *idChars = env->GetStringUTFChars(jId, nullptr);
+            desc.id = idChars;
+            env->ReleaseStringUTFChars(jId, idChars);
+
+            auto jAttach = (jstring)env->GetObjectField(obj, fAttach);
+            const char *attachChars = env->GetStringUTFChars(jAttach, nullptr);
+            desc.attachmentPoint = attachChars;
+            env->ReleaseStringUTFChars(jAttach, attachChars);
+
+            auto jModel = (jstring)env->GetObjectField(obj, fModel);
+            const char *modelChars = env->GetStringUTFChars(jModel, nullptr);
+            desc.model = modelChars;
+            env->ReleaseStringUTFChars(jModel, modelChars);
+
+            jobject visibleObj = env->GetObjectField(obj, fVisible);
+            if (visibleObj)
+                desc.visible = env->CallBooleanMethod(visibleObj, boolValue);
+
+            jobject scaleObj = env->GetObjectField(obj, fScale);
+            if (scaleObj)
+            {
+                desc.scale[0] = static_cast<float>(env->GetDoubleField(scaleObj, fX));
+                desc.scale[1] = static_cast<float>(env->GetDoubleField(scaleObj, fY));
+                desc.scale[2] = static_cast<float>(env->GetDoubleField(scaleObj, fZ));
+            }
+
+            jobject offsetObj = env->GetObjectField(obj, fOffset);
+            if (offsetObj)
+            {
+                desc.offset[0] = static_cast<float>(env->GetDoubleField(offsetObj, fX));
+                desc.offset[1] = static_cast<float>(env->GetDoubleField(offsetObj, fY));
+                desc.offset[2] = static_cast<float>(env->GetDoubleField(offsetObj, fZ));
+            }
+
+            jobject rotObj = env->GetObjectField(obj, fRotation);
+            if (rotObj)
+            {
+                desc.rotation[0] = static_cast<float>(env->GetDoubleField(rotObj, fX));
+                desc.rotation[1] = static_cast<float>(env->GetDoubleField(rotObj, fY));
+                desc.rotation[2] = static_cast<float>(env->GetDoubleField(rotObj, fZ));
+            }
+
+            descs.push_back(std::move(desc));
+            env->PopLocalFrame(nullptr);
+        }
+
+        arApplication_->SetFaceFilters(std::move(descs));
+    }
+
     void destroySession()
     {
         if (arApplication_)
             arApplication_->DestroySession();
     }
 
-    facebook::jni::local_ref<facebook::jni::JArrayClass<facebook::jni::JObject>> drainFaceEvents()
+    jobjectArray drainEvents()
     {
         using namespace facebook::jni;
+        JNIEnv *env = Environment::current();
+
+        jclass cls = env->FindClass("com/margelo/nitro/arcore/AREvent");
 
         if (!arApplication_)
-        {
-            auto cls = findClassStatic("com/margelo/nitro/arcore/FaceEvent");
-            return JArrayClass<JObject>::newArray(0, cls);
-        }
+            return env->NewObjectArray(0, cls, nullptr);
 
-        auto events = arApplication_->DrainFaceEvents();
-        auto cls = findClassStatic("com/margelo/nitro/arcore/FaceEvent");
-        auto result = JArrayClass<JObject>::newArray(events.size(), cls);
+        auto events = arApplication_->DrainEvents();
+        if (events.empty())
+            return env->NewObjectArray(0, cls, nullptr);
 
-        auto fromCpp = cls->getStaticMethod<local_ref<JObject>(jint, local_ref<JString>, local_ref<JArrayDouble>)>("fromCpp");
+        jmethodID fromCpp = env->GetStaticMethodID(cls, "fromCpp",
+            "(ILjava/lang/String;Ljava/lang/String;[D[D)Lcom/margelo/nitro/arcore/AREvent;");
+
+        jobjectArray result = env->NewObjectArray(
+            static_cast<jsize>(events.size()), cls, nullptr);
 
         for (size_t i = 0; i < events.size(); ++i)
         {
             const auto &e = events[i];
-            auto faceId = make_jstring(e.faceId);
-            auto transform = JArrayDouble::newArray(16);
-            JNIEnv *env = Environment::current();
-            jdouble buf[16];
-            for (int j = 0; j < 16; ++j)
-                buf[j] = static_cast<jdouble>(e.transform[j]);
-            env->SetDoubleArrayRegion(transform.get(), 0, 16, buf);
+            jstring idA = env->NewStringUTF(e.idA.c_str());
+            jstring strB = env->NewStringUTF(e.strB.c_str());
 
-            auto obj = fromCpp(cls, static_cast<jint>(e.type), faceId, transform);
-            (*result)[i] = obj;
+            jdoubleArray transform = env->NewDoubleArray(16);
+            env->SetDoubleArrayRegion(transform, 0, 16, e.transform);
+
+            jdoubleArray scalars = env->NewDoubleArray(8);
+            env->SetDoubleArrayRegion(scalars, 0, 8, e.scalars);
+
+            jobject obj = env->CallStaticObjectMethod(cls, fromCpp,
+                static_cast<jint>(e.category), idA, strB, transform, scalars);
+            env->SetObjectArrayElement(result, static_cast<jsize>(i), obj);
+
+            env->DeleteLocalRef(idA);
+            env->DeleteLocalRef(strB);
+            env->DeleteLocalRef(transform);
+            env->DeleteLocalRef(scalars);
+            env->DeleteLocalRef(obj);
         }
+
         return result;
+    }
+
+    jboolean isSessionInitialized()
+    {
+        return arApplication_ && arApplication_->IsSessionInitialized() ? JNI_TRUE : JNI_FALSE;
     }
 
     static void registerNatives()
@@ -318,6 +448,7 @@ public:
             makeNativeMethod("setDebugShowPointCloud", "(Z)V", ARApplicationWrapper::setDebugShowPointCloud),
             makeNativeMethod("setDebugShowWorldOrigin", "(Z)V", ARApplicationWrapper::setDebugShowWorldOrigin),
             makeNativeMethod("setDebugShowDepthMap", "(Z)V", ARApplicationWrapper::setDebugShowDepthMap),
+            makeNativeMethod("setCameraFacing", "(Ljava/lang/String;)V", ARApplicationWrapper::setCameraFacing),
             makeNativeMethod("setShaderMode", "(Ljava/lang/String;)V", ARApplicationWrapper::setShaderMode),
             makeNativeMethod("setDisplayRotation", "(I)V", ARApplicationWrapper::setDisplayRotation),
             makeNativeMethod("onARViewMounted", "()V", ARApplicationWrapper::onARViewMounted),
@@ -326,7 +457,9 @@ public:
             makeNativeMethod("setARObjects", "([Lcom/margelo/nitro/arcore/ARObjectDescriptor;)V", ARApplicationWrapper::setARObjects),
             makeNativeMethod("createAnchor", "(FF)Ljava/lang/String;", ARApplicationWrapper::createAnchor),
             makeNativeMethod("removeAnchor", "(Ljava/lang/String;)V", ARApplicationWrapper::removeAnchor),
-            makeNativeMethod("drainFaceEvents", "()[Lcom/margelo/nitro/arcore/FaceEvent;", ARApplicationWrapper::drainFaceEvents),
+            makeNativeMethod("drainEvents", "()[Lcom/margelo/nitro/arcore/AREvent;", ARApplicationWrapper::drainEvents),
+            makeNativeMethod("isSessionInitialized", "()Z", ARApplicationWrapper::isSessionInitialized),
+            makeNativeMethod("setFaceFilters", "([Lcom/margelo/nitro/arcore/ARFaceFilterDescriptor;)V", ARApplicationWrapper::setFaceFilters),
         });
     }
 };
