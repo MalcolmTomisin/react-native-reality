@@ -266,6 +266,7 @@ namespace arcore
             tracking_state_reported_ = false;
             last_tracking_state_ = AR_TRACKING_STATE_STOPPED;
             last_failure_reason_ = AR_TRACKING_FAILURE_REASON_NONE;
+            last_face_tracked_ = -1;
             {
                 std::lock_guard<std::mutex> lock(face_filters_mutex_);
                 face_filter_descs_.clear();
@@ -344,12 +345,19 @@ namespace arcore
             ArTrackingState camera_tracking_state;
             ArCamera_getTrackingState(session, ar_camera, &camera_tracking_state);
 
-            ArTrackingFailureReason failure_reason = AR_TRACKING_FAILURE_REASON_NONE;
-            if (camera_tracking_state != AR_TRACKING_STATE_TRACKING)
+            // The ArCamera tracking state reflects 6DOF world tracking, which is only
+            // meaningful for world sessions. Face sessions do no world tracking (the
+            // camera stays PAUSED), so their tracking state is emitted from
+            // ProcessFaces based on whether a face is in view.
+            if (session_type_ != "face")
             {
-                ArCamera_getTrackingFailureReason(session, ar_camera, &failure_reason);
+                ArTrackingFailureReason failure_reason = AR_TRACKING_FAILURE_REASON_NONE;
+                if (camera_tracking_state != AR_TRACKING_STATE_TRACKING)
+                {
+                    ArCamera_getTrackingFailureReason(session, ar_camera, &failure_reason);
+                }
+                EmitTrackingStateIfChanged(camera_tracking_state, failure_reason);
             }
-            EmitTrackingStateIfChanged(camera_tracking_state, failure_reason);
 
             if (session_type_ == "face")
             {
@@ -678,6 +686,31 @@ namespace arcore
             PushEvent(std::move(event));
         }
 
+        // Emits a TRACKING_STATE event for face sessions based on whether a face is
+        // in view (the ArCamera world-tracking state is meaningless here). Debounced
+        // on the last-reported value so JS isn't spammed every frame.
+        void EmitFaceTrackingStateIfChanged(bool has_face)
+        {
+            int state = has_face ? 1 : 0;
+            if (last_face_tracked_ == state)
+                return;
+            last_face_tracked_ = state;
+
+            AREvent event;
+            event.category = AREvent::TRACKING_STATE;
+            if (has_face)
+            {
+                event.strB = "tracking";
+                event.idA = "";
+            }
+            else
+            {
+                event.strB = "limited";
+                event.idA = "initializing"; // waiting for a face to enter the frame
+            }
+            PushEvent(std::move(event));
+        }
+
         // Surfaces detected planes to JS. Mirrors ProcessFaces: diffs a tracked set
         // to emit PLANE_DETECTED / PLANE_UPDATED / PLANE_REMOVED. Data only — no
         // rendering (debugShowPlanes visual rendering is a follow-up).
@@ -992,6 +1025,8 @@ namespace arcore
                 }
             }
 
+            EmitFaceTrackingStateIfChanged(!current_face_ids.empty());
+
             ArTrackableList_destroy(face_list);
         }
 
@@ -1040,6 +1075,8 @@ namespace arcore
         ArTrackingState last_tracking_state_ = AR_TRACKING_STATE_STOPPED;
         ArTrackingFailureReason last_failure_reason_ = AR_TRACKING_FAILURE_REASON_NONE;
         bool tracking_state_reported_ = false;
+        // Last-reported face tracking (-1 unset, 0 no face, 1 face) for face sessions.
+        int last_face_tracked_ = -1;
 
         std::vector<FaceFilterDesc> face_filter_descs_;
         std::mutex face_filters_mutex_;
