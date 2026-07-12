@@ -41,6 +41,7 @@ export default function App() {
   const [faceStatus, setFaceStatus] = useState('');
   const [blendShapeInfo, setBlendShapeInfo] = useState('');
   const [sessionState, setSessionState] = useState('');
+  const [activeType, setActiveType] = useState('');
 
   useEffect(() => {
     initialize().then(setInitialized);
@@ -63,15 +64,23 @@ export default function App() {
   }, []);
 
   const onSessionStateChange = useCallback((state: string) => {
+    console.log('Session state changed to', state);
     setSessionState(state);
   }, []);
 
+  const onSessionTypeChange = useCallback((type: string) => {
+    console.log('Session type changed to', type);
+    setActiveType(type);
+  }, []);
+
   const onARCoreError = useCallback((err: ARError) => {
+    console.error('ARCore error:', err.code, err.message);
     setError(`${err.code}: ${err.message}`);
   }, []);
 
   const onTrackingStateChange = useCallback(
     (state: ARTrackingStateInfo) => {
+      console.log('Tracking state changed to', state.state, state.reason);
       setTrackingState(state.state);
       if (state.state === 'tracking' && !depthSupported) {
         setDepthSupported(isDepthModeSupported());
@@ -125,8 +134,7 @@ export default function App() {
     }
   }, []);
 
-  const handleReset = useCallback(() => {
-    arViewRef.current?.resetSession();
+  const resetUiState = useCallback(() => {
     setAnchors([]);
     setPlaneCount(0);
     setTapCount(0);
@@ -138,10 +146,18 @@ export default function App() {
     setError(null);
   }, []);
 
+  const handleReset = useCallback(() => {
+    arViewRef.current?.resetSession();
+    resetUiState();
+  }, [resetUiState]);
+
+  // Toggling only changes the sessionType prop; the native layer reconfigures the
+  // session (and camera) in place. No session destroy here — that would leave
+  // Android with no session to recreate.
   const handleToggleMode = useCallback(() => {
-    handleReset();
+    resetUiState();
     setMode((m) => (m === 'world' ? 'face' : 'world'));
-  }, [handleReset]);
+  }, [resetUiState]);
 
   if (!initialized) {
     return (
@@ -172,6 +188,7 @@ export default function App() {
           focusMode="auto"
           debugShowPlanes={true}
           onSessionStateChange={onSessionStateChange}
+          onSessionTypeChange={onSessionTypeChange}
           onARCoreError={onARCoreError}
           onTrackingStateChange={onTrackingStateChange}
           onPlaneDetected={onPlaneDetected}
@@ -195,6 +212,7 @@ export default function App() {
           cameraFacing="front"
           lightEstimationMode="environmentalHDR"
           onSessionStateChange={onSessionStateChange}
+          onSessionTypeChange={onSessionTypeChange}
           onARCoreError={onARCoreError}
           onTrackingStateChange={onTrackingStateChange}
           onFaceDetected={onFaceDetected}
@@ -226,6 +244,7 @@ export default function App() {
         </Text>
         {error && <Text style={styles.errorText}>{error}</Text>}
         <Text style={styles.text}>Session: {sessionState || 'none'}</Text>
+        <Text style={styles.text}>Active: {activeType || 'none'}</Text>
         <Text style={styles.text}>Tracking: {trackingState || 'none'}</Text>
 
         {mode === 'world' && (
