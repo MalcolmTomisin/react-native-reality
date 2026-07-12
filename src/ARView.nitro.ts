@@ -26,6 +26,8 @@ export type ARInstantPlacementMode = 'disabled' | 'enabled';
 
 export type ARFaceAttachmentPoint =
   | 'forehead'
+  | 'foreheadLeft'
+  | 'foreheadRight'
   | 'noseTip'
   | 'noseBridge'
   | 'leftEye'
@@ -88,12 +90,15 @@ export interface ARError {
 }
 
 export interface ARTrackingStateInfo {
+  /** Canonical `ARTrackingState`: 'tracking' | 'limited' | 'unavailable'. */
   state: string;
+  /** Canonical `ARTrackingReason` (omitted when 'tracking'). */
   reason?: string;
 }
 
 export interface ARPlaneInfo {
   id: string;
+  /** Canonical `ARPlaneType`: 'horizontal' | 'vertical'. */
   type: string;
   centerX: number;
   centerY: number;
@@ -114,6 +119,13 @@ export interface ARHitTestResult {
   y: number;
   z: number;
   hasHit: boolean;
+}
+
+export interface ARTapResult {
+  x: number;
+  y: number;
+  hasHit: boolean;
+  anchorId?: string;
 }
 
 export interface ARFaceInfo {
@@ -151,11 +163,14 @@ export interface ARViewProps extends HybridViewProps {
   faceFilters?: ARFaceFilterDescriptor[];
   faceTextureURI?: string;
 
+  /** Fires on session lifecycle transitions. `state` is a canonical `ARSessionState`. */
+  onSessionStateChange?: (state: string) => void;
   onARCoreError?: (error: ARError) => void;
   onTrackingStateChange?: (state: ARTrackingStateInfo) => void;
   onPlaneDetected?: (plane: ARPlaneInfo) => void;
   onPlaneUpdated?: (plane: ARPlaneInfo) => void;
   onAnchorCreated?: (anchor: ARAnchorResult) => void;
+  onTap?: (result: ARTapResult) => void;
   onFaceDetected?: (face: ARFaceInfo) => void;
   onFaceUpdated?: (face: ARFaceInfo) => void;
   onFaceLost?: (faceId: string) => void;
