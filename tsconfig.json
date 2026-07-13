@@ -2,7 +2,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "react-native-ar-core": ["./src/index"]
+      "react-native-reality": ["./src/index"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,

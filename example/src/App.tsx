@@ -17,7 +17,7 @@ import {
   type ARTrackingStateInfo,
   type ARPlaneInfo,
   type ARAnchorResult,
-} from 'react-native-ar-core';
+} from 'react-native-reality';
 
 export default function App() {
   const arViewRef = useRef<ARViewHandle>(null);
