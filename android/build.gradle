@@ -138,6 +138,7 @@ dependencies {
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
   implementation 'com.google.ar:core:1.33.0'
   natives 'com.google.ar:core:1.33.0'
+  implementation 'androidx.lifecycle:lifecycle-process:2.6.2'
   implementation project(":react-native-nitro-modules")
 }
 

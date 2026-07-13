@@ -6,6 +6,12 @@ export { ARSceneContext } from './ARSceneContext';
 export type { ARSceneContextType } from './ARSceneContext';
 export { ARFaceSceneContext } from './ARFaceSceneContext';
 export type { ARFaceSceneContextType } from './ARFaceSceneContext';
+export type {
+  ARSessionState,
+  ARTrackingState,
+  ARTrackingReason,
+  ARPlaneType,
+} from './types';
 export {
   initialize,
   isDepthModeSupported,
@@ -34,6 +40,7 @@ export type {
   ARPlaneInfo,
   ARAnchorResult,
   ARHitTestResult,
+  ARTapResult,
   ARFaceInfo,
   ARBlendShapes,
   ARViewProps,
