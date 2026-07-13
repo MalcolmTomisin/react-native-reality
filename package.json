@@ -1,7 +1,7 @@
 {
-  "name": "react-native-ar-core",
+  "name": "react-native-reality",
   "version": "0.1.0",
-  "description": "Wrapper for Google's ARCore",
+  "description": "Native augmented reality for React Native — world & face tracking, plane detection, hit-testing, and 3D content on iOS (ARKit) and Android (ARCore), powered by Nitro Modules.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
   "exports": {
@@ -34,7 +34,7 @@
     "!**/.*"
   ],
   "scripts": {
-    "example": "yarn workspace react-native-ar-core-example",
+    "example": "yarn workspace react-native-reality-example",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
     "prepare": "bob build",
     "nitrogen": "nitrogen",
@@ -46,18 +46,33 @@
   "keywords": [
     "react-native",
     "ios",
-    "android"
+    "android",
+    "augmented-reality",
+    "ar",
+    "arkit",
+    "arcore",
+    "world-tracking",
+    "plane-detection",
+    "face-tracking",
+    "face-filters",
+    "augmented-faces",
+    "hit-testing",
+    "anchors",
+    "3d",
+    "realitykit",
+    "nitro-modules",
+    "spatial"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MalcolmTomisin/react-native-ar-core.git"
+    "url": "git+https://github.com/MalcolmTomisin/react-native-reality.git"
   },
   "author": "Tomi Alu <malcolmtomisin@gmail.com> (https://github.com/MalcolmTomisin)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/MalcolmTomisin/react-native-ar-core/issues"
+    "url": "https://github.com/MalcolmTomisin/react-native-reality/issues"
   },
-  "homepage": "https://github.com/MalcolmTomisin/react-native-ar-core#readme",
+  "homepage": "https://github.com/MalcolmTomisin/react-native-reality#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },

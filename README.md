@@ -1,12 +1,12 @@
-# react-native-ar-core
+# react-native-reality
 
-Wrapper for Google's ARCore
+Native augmented reality for React Native — world & face tracking, plane detection, hit-testing, and 3D content on iOS (ARKit) and Android (ARCore), powered by Nitro Modules.
 
 ## Installation
 
 
 ```sh
-npm install react-native-ar-core react-native-nitro-modules
+npm install react-native-reality react-native-nitro-modules
 
 > `react-native-nitro-modules` is required as this library relies on [Nitro Modules](https://nitro.margelo.com/).
 ```
@@ -16,7 +16,7 @@ npm install react-native-ar-core react-native-nitro-modules
 
 
 ```js
-import { multiply } from 'react-native-ar-core';
+import { multiply } from 'react-native-reality';
 
 // ...
 

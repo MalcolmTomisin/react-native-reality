@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.authors      = package["author"]
 
   s.platforms    = { :ios => '14.0' }
-  s.source       = { :git => "https://github.com/MalcolmTomisin/react-native-ar-core.git", :tag => "#{s.version}" }
+  s.source       = { :git => "https://github.com/MalcolmTomisin/react-native-reality.git", :tag => "#{s.version}" }
   s.frameworks   = 'ARKit', 'RealityKit'
 
   s.source_files = [
