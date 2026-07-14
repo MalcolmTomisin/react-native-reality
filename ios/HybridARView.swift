@@ -14,14 +14,26 @@ class HybridARView: HybridARViewHybridSpec {
     TapHandler(owner: self)
   }()
 
-  fileprivate lazy var arView: RealityKit.ARView = {
-    let view = RealityKit.ARView(frame: .zero)
+  fileprivate lazy var arView: SessionARView = {
+    let view = SessionARView(frame: .zero)
+    view.owner = self
+    // We drive session.run(config) ourselves (world AND face). Without this,
+    // RealityKit owns the configuration and overrides our face config back to
+    // world tracking, so the front camera never engages in face mode.
+    view.automaticallyConfigureSession = false
     view.session.delegate = sessionDelegate
     let tap = UITapGestureRecognizer(target: tapHandler, action: #selector(TapHandler.handleTap(_:)))
     view.addGestureRecognizer(tap)
     registerLifecycleObservers()
     return view
   }()
+
+  /// Starts the session once the AR view enters a window (mirrors Android's
+  /// onViewAttachedToWindow). iOS has no other reliable "view attached" hook, so
+  /// without this runSession() never runs and the feed stays black.
+  fileprivate func viewDidAttach() {
+    if !sessionRunning { runSession() }
+  }
 
   var view: UIView { arView }
 
@@ -347,6 +359,26 @@ class HybridARView: HybridARViewHybridSpec {
     return nil
   }
 
+  /// Loads a model as a RealityKit entity. iOS/RealityKit needs a `.usdz` in the
+  /// app bundle (unlike Android's `.obj`); when the asset is missing or fails to
+  /// load, returns a small placeholder primitive so tracking stays visible instead
+  /// of rendering nothing. Add a `<name>.usdz` to the bundle to show a real model.
+  private static func loadModelEntity(_ model: String) -> Entity {
+    if let url = resolveModelURL(model), let entity = try? Entity.load(contentsOf: url) {
+      return entity
+    }
+    let base = model
+      .replacingOccurrences(of: ".obj", with: "")
+      .replacingOccurrences(of: ".usdz", with: "")
+    if let entity = try? Entity.load(named: base) {
+      return entity
+    }
+    NSLog("[react-native-reality] Model \"%@\" not found in the app bundle (add a .usdz); showing a placeholder.", model)
+    let mesh = MeshResource.generateSphere(radius: 0.03)
+    let material = SimpleMaterial(color: .systemTeal, roughness: 0.4, isMetallic: false)
+    return ModelEntity(mesh: mesh, materials: [material])
+  }
+
   // MARK: - Object synchronization
 
   private func syncObjects() {
@@ -359,29 +391,17 @@ class HybridARView: HybridARViewHybridSpec {
       if existing != nil { existing?.removeFromParent() }
       if desc.visible == false { continue }
 
-      do {
-        let entity: Entity
-        if let url = Self.resolveModelURL(desc.model) {
-          entity = try Entity.load(contentsOf: url)
-        } else {
-          let modelName = desc.model
-            .replacingOccurrences(of: ".obj", with: "")
-            .replacingOccurrences(of: ".usdz", with: "")
-          entity = try Entity.load(named: modelName)
-        }
-        entity.name = desc.id
+      let entity = Self.loadModelEntity(desc.model)
+      entity.name = desc.id
 
-        if let s = desc.scale {
-          entity.scale = SIMD3<Float>(Float(s.x), Float(s.y), Float(s.z))
-        }
-        if let r = desc.rotation {
-          entity.orientation = simd_quatf(ix: Float(r.x), iy: Float(r.y), iz: Float(r.z), r: Float(r.w))
-        }
-
-        anchor.addChild(entity)
-      } catch {
-        onARCoreError?(ARError(code: "MODEL_LOAD_FAILED", message: error.localizedDescription))
+      if let s = desc.scale {
+        entity.scale = SIMD3<Float>(Float(s.x), Float(s.y), Float(s.z))
       }
+      if let r = desc.rotation {
+        entity.orientation = simd_quatf(ix: Float(r.x), iy: Float(r.y), iz: Float(r.z), r: Float(r.w))
+      }
+
+      anchor.addChild(entity)
     }
   }
 
@@ -409,41 +429,29 @@ class HybridARView: HybridARViewHybridSpec {
       }
       if desc.visible == false { continue }
 
-      do {
-        let entity: Entity
-        if let url = Self.resolveModelURL(desc.model) {
-          entity = try Entity.load(contentsOf: url)
-        } else {
-          let modelName = desc.model
-            .replacingOccurrences(of: ".obj", with: "")
-            .replacingOccurrences(of: ".usdz", with: "")
-          entity = try Entity.load(named: modelName)
-        }
-        entity.name = desc.id
+      let entity = Self.loadModelEntity(desc.model)
+      entity.name = desc.id
 
-        if let s = desc.scale {
-          entity.scale = SIMD3<Float>(Float(s.x), Float(s.y), Float(s.z))
-        }
-
-        var position = SIMD3<Float>(0, 0, 0)
-        if let o = desc.offset {
-          position = SIMD3<Float>(Float(o.x), Float(o.y), Float(o.z))
-        }
-        position = position + Self.offsetForAttachmentPoint(desc.attachmentPoint)
-        entity.position = position
-
-        if let r = desc.rotation {
-          let angles = SIMD3<Float>(Float(r.x), Float(r.y), Float(r.z))
-          entity.orientation = simd_quatf(angle: angles.x, axis: [1, 0, 0])
-            * simd_quatf(angle: angles.y, axis: [0, 1, 0])
-            * simd_quatf(angle: angles.z, axis: [0, 0, 1])
-        }
-
-        faceAnchor.addChild(entity)
-        faceFilterEntities[desc.id] = entity
-      } catch {
-        onARCoreError?(ARError(code: "FACE_MODEL_LOAD_FAILED", message: error.localizedDescription))
+      if let s = desc.scale {
+        entity.scale = SIMD3<Float>(Float(s.x), Float(s.y), Float(s.z))
       }
+
+      var position = SIMD3<Float>(0, 0, 0)
+      if let o = desc.offset {
+        position = SIMD3<Float>(Float(o.x), Float(o.y), Float(o.z))
+      }
+      position = position + Self.offsetForAttachmentPoint(desc.attachmentPoint)
+      entity.position = position
+
+      if let r = desc.rotation {
+        let angles = SIMD3<Float>(Float(r.x), Float(r.y), Float(r.z))
+        entity.orientation = simd_quatf(angle: angles.x, axis: [1, 0, 0])
+          * simd_quatf(angle: angles.y, axis: [0, 1, 0])
+          * simd_quatf(angle: angles.z, axis: [0, 0, 1])
+      }
+
+      faceAnchor.addChild(entity)
+      faceFilterEntities[desc.id] = entity
     }
   }
 
@@ -467,6 +475,17 @@ class HybridARView: HybridARViewHybridSpec {
   fileprivate func updateFaceFilterTransforms(_ faceAnchor: ARFaceAnchor) {
     guard let anchorEntity = faceAnchorEntity else { return }
     anchorEntity.transform = Transform(matrix: faceAnchor.transform)
+  }
+}
+
+// MARK: - RealityKit ARView that starts the session on attach
+
+final class SessionARView: RealityKit.ARView {
+  weak var owner: HybridARView?
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    if window != nil { owner?.viewDidAttach() }
   }
 }
 
