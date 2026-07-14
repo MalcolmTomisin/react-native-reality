@@ -303,6 +303,84 @@ Emitted identically on both platforms:
 
 In a **face** session `onTrackingStateChange` reflects whether a *face* is being tracked (world/motion tracking isn't performed on the front camera).
 
+## Roadmap
+
+Status by platform. Items shared by both platforms (e.g. `initialize()`, geospatial) appear under each.
+
+### Android (ARCore)
+
+**Done**
+
+- [x] World-tracking session (back camera)
+- [x] Face-tracking session (front camera, Augmented Faces)
+- [x] Runtime session / camera switching via `sessionType` (no remount)
+- [x] Plane detection → JS (`onPlaneDetected` / `onPlaneUpdated`)
+- [x] Hit-testing and tap reporting (`onTap`, world-only)
+- [x] World anchors + `<ARObject>` (scale, rotation, `color`, visibility)
+- [x] Face-landmark filters (`<ARFaceFilter>`)
+- [x] Tracking-state events (`onTrackingStateChange`, incl. face tracking)
+- [x] Session-lifecycle + active-type events (`onSessionStateChange` / `onSessionTypeChange`)
+- [x] Background / foreground continuity
+- [x] Depth-map overlay (`debugShowDepthMap` / `shaderMode: 'depth'`)
+- [x] `isDepthModeSupported()`
+- [x] Canonical, platform-consistent event vocabulary
+
+**Not yet implemented**
+
+- [ ] `takeSnapshot()` (currently returns an empty string)
+- [ ] `paused` prop (pause/resume via prop)
+- [ ] `lightEstimationMode`
+- [ ] `depthMode` selection (depth is auto-enabled when supported; the prop value is ignored)
+- [ ] `focusMode`
+- [ ] `cameraTargetFps`
+- [ ] `cameraDepthSensorUsage`
+- [ ] Cloud anchors (`cloudAnchorMode`)
+- [ ] Instant placement (`instantPlacementMode`)
+- [ ] Geospatial mode (`isGeospatialModeSupported()`, `depthMode: 'geospatial'`)
+- [ ] Debug overlays: `debugShowPlanes`, `debugShowPointCloud`, `debugShowWorldOrigin`
+- [ ] Face-mesh overlay (`debugShowFaceMesh`)
+- [ ] Face-texture overlay (`faceTextureURI`)
+- [ ] `<ARObject>` `texture` prop
+- [ ] Real availability check in `initialize()` / ARCore install flow (currently always resolves `true`)
+- [ ] Blend shapes — not exposed by ARCore (iOS-only capability)
+
+### iOS (ARKit / RealityKit)
+
+**Done**
+
+- [x] World-tracking session (back camera)
+- [x] Face-tracking session (front camera, `ARFaceTrackingConfiguration`)
+- [x] Session start on view attach + runtime `sessionType` switching
+- [x] Plane detection → JS (`onPlaneDetected` / `onPlaneUpdated`)
+- [x] Hit-testing and tap reporting (`onTap`, world-only)
+- [x] World anchors + `<ARObject>` (scale, rotation, visibility)
+- [x] Face-landmark filters (`<ARFaceFilter>`, placeholder when a `.usdz` is missing)
+- [x] Tracking-state events (`onTrackingStateChange`, incl. face tracking)
+- [x] Session-lifecycle + active-type events (surfaces face→world fallback)
+- [x] Background / foreground continuity (interruption + `didBecomeActive`)
+- [x] Blend shapes (`onBlendShapesUpdate`)
+- [x] `depthMode` (scene depth), `lightEstimationMode`, `paused`, `planeDetectionMode`
+- [x] Debug overlays: `debugShowPlanes`, `debugShowPointCloud`, `debugShowWorldOrigin`
+- [x] `takeSnapshot()`
+- [x] Canonical, platform-consistent event vocabulary
+
+**Not yet implemented**
+
+- [ ] Imperative `ref` methods reachable from JS (`hitTest`, `createAnchor`, `removeAnchor`, `resetSession`, `destroySession`) — native view-ref wiring
+- [ ] `<ARObject>` `color` and `texture`
+- [ ] Depth-map / `shaderMode` overlay (`debugShowDepthMap`)
+- [ ] `focusMode`
+- [ ] `cameraTargetFps`
+- [ ] `cameraDepthSensorUsage`
+- [ ] Cloud anchors (`cloudAnchorMode`)
+- [ ] Instant placement (`instantPlacementMode`)
+- [ ] Geospatial mode (`isGeospatialModeSupported()`, `depthMode: 'geospatial'`)
+- [ ] `isDepthModeSupported()` (currently returns `false`)
+- [ ] Face-mesh overlay (`debugShowFaceMesh`)
+- [ ] Face-texture overlay (`faceTextureURI`)
+- [ ] Real availability check in `initialize()` (currently always resolves `true`)
+- [ ] Bundled `.usdz` face models for the example (falls back to a placeholder primitive today)
+
 ## Contributing
 
 - [Development workflow](CONTRIBUTING.md#development-workflow)
