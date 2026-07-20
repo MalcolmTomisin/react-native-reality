@@ -6,6 +6,8 @@ export { ARSceneContext } from './ARSceneContext';
 export type { ARSceneContextType } from './ARSceneContext';
 export { ARFaceSceneContext } from './ARFaceSceneContext';
 export type { ARFaceSceneContextType } from './ARFaceSceneContext';
+export { resolveAsset } from './resolveAsset';
+export type { ARAssetSource } from './resolveAsset';
 export type {
   ARSessionState,
   ARTrackingState,

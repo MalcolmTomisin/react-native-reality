@@ -209,6 +209,7 @@ public:
         jfieldID fId = env->GetFieldID(cls, "id", "Ljava/lang/String;");
         jfieldID fAnchorId = env->GetFieldID(cls, "anchorId", "Ljava/lang/String;");
         jfieldID fModel = env->GetFieldID(cls, "model", "Ljava/lang/String;");
+        jfieldID fTexture = env->GetFieldID(cls, "texture", "Ljava/lang/String;");
 
         jsize size = env->GetArrayLength(rawArray);
         std::vector<arcore::ARApplication::ARObjectDesc> descs;
@@ -236,11 +237,26 @@ public:
             desc.model = c;
             env->ReleaseStringUTFChars(jModel, c);
 
+            auto jTexture = (jstring)env->GetObjectField(obj, fTexture);
+            if (jTexture)
+            {
+                c = env->GetStringUTFChars(jTexture, nullptr);
+                desc.texture = c;
+                env->ReleaseStringUTFChars(jTexture, c);
+            }
+
             descs.push_back(std::move(desc));
             env->PopLocalFrame(nullptr);
         }
 
         arApplication_->SetARObjects(std::move(descs));
+    }
+
+    void setObjectTexture(
+        facebook::jni::alias_ref<facebook::jni::JString> uri, jint glTextureId)
+    {
+        if (arApplication_ && uri)
+            arApplication_->SetObjectTexture(uri->toStdString(), static_cast<uint32_t>(glTextureId));
     }
 
     facebook::jni::local_ref<facebook::jni::JString> createAnchor(jfloat x, jfloat y)
@@ -461,6 +477,7 @@ public:
             makeNativeMethod("onARViewUnmounted", "()V", ARApplicationWrapper::onARViewUnmounted),
             makeNativeMethod("destroySession", "()V", ARApplicationWrapper::destroySession),
             makeNativeMethod("setARObjects", "([Lcom/margelo/nitro/arcore/ARObjectDescriptor;)V", ARApplicationWrapper::setARObjects),
+            makeNativeMethod("setObjectTexture", "(Ljava/lang/String;I)V", ARApplicationWrapper::setObjectTexture),
             makeNativeMethod("createAnchor", "(FF)Ljava/lang/String;", ARApplicationWrapper::createAnchor),
             makeNativeMethod("removeAnchor", "(Ljava/lang/String;)V", ARApplicationWrapper::removeAnchor),
             makeNativeMethod("drainEvents", "()[Lcom/margelo/nitro/arcore/AREvent;", ARApplicationWrapper::drainEvents),

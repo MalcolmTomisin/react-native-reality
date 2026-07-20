@@ -201,6 +201,12 @@ export default function App() {
               anchorId={anchor.anchorId}
               model="andy"
               scale={{ x: 0.1, y: 0.1, z: 0.1 }}
+              // texture accepts idiomatic RN sources:
+              //   require('./tex.png') | { uri: 'file://…' | 'data:…' } | 'bundledName'
+              // Here: a texture fetched over the network.
+              texture={{
+                uri: 'https://threejs.org/examples/textures/uv_grid_opengl.jpg',
+              }}
             />
           ))}
         </ARView>

@@ -114,7 +114,8 @@ void ObjRenderer::SetMaterialProperty(float ambient, float diffuse,
 void ObjRenderer::Draw(const glm::mat4& projection_mat,
                        const glm::mat4& view_mat, const glm::mat4& model_mat,
                        const float* color_correction4,
-                       const float* object_color4) const {
+                       const float* object_color4,
+                       GLuint override_texture_id) const {
   if (!shader_program_) {
     LOGE("shader_program is null.");
     return;
@@ -124,7 +125,10 @@ void ObjRenderer::Draw(const glm::mat4& projection_mat,
 
   glActiveTexture(GL_TEXTURE0);
   glUniform1i(texture_uniform_, 0);
-  glBindTexture(GL_TEXTURE_2D, texture_id_);
+  // Use a per-object texture (e.g. one supplied from JS) when provided,
+  // otherwise the model's baked-in texture.
+  glBindTexture(GL_TEXTURE_2D,
+                override_texture_id != 0 ? override_texture_id : texture_id_);
 
   glm::mat4 mvp_mat = projection_mat * view_mat * model_mat;
   glm::mat4 mv_mat = view_mat * model_mat;

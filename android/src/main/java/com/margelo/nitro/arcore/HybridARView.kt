@@ -1,7 +1,9 @@
 package com.margelo.nitro.arcore
 
+import android.graphics.Bitmap
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.opengl.GLUtils
 import android.os.Handler
 import android.os.Looper
 import android.view.GestureDetector
@@ -211,6 +213,10 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
         set(value) {
             field = value
             value?.let { descs ->
+                descs.mapNotNull { it.texture }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .forEach { ensureObjectTexture(it) }
                 glSurfaceView.queueEvent {
                     app.setARObjects(descs)
                 }
@@ -297,6 +303,41 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
     private fun scheduleReconfigure() {
         mainHandler.removeCallbacks(reconfigure)
         mainHandler.post(reconfigure)
+    }
+
+    // Loads a JS-supplied object texture once per URI: decode off-thread (may hit
+    // the network), then upload to a GL texture on the GL thread and register it
+    // with the native renderer via app.setObjectTexture(uri, id).
+    private val requestedTextures =
+        java.util.Collections.synchronizedSet(HashSet<String>())
+
+    private fun ensureObjectTexture(uri: String) {
+        if (!requestedTextures.add(uri)) return
+        Thread {
+            val bitmap = app.loadBitmapFromUri(uri)
+            if (bitmap == null) {
+                requestedTextures.remove(uri)
+                return@Thread
+            }
+            glSurfaceView.queueEvent {
+                val texId = uploadGlTexture(bitmap)
+                app.setObjectTexture(uri, texId)
+            }
+        }.start()
+    }
+
+    private fun uploadGlTexture(bitmap: Bitmap): Int {
+        val ids = IntArray(1)
+        GLES20.glGenTextures(1, ids, 0)
+        val id = ids[0]
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, id)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+        bitmap.recycle()
+        return id
     }
 
     override fun hitTest(x: Double, y: Double): Promise<ARHitTestResult> {

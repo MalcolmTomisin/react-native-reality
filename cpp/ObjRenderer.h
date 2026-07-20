@@ -47,10 +47,11 @@ class ObjRenderer {
   void SetMaterialProperty(float ambient, float diffuse, float specular,
                            float specular_power);
 
-  // Draws the model.
+  // Draws the model. When `override_texture_id` is non-zero it is used instead of
+  // the model's baked-in texture (e.g. a texture supplied from JavaScript).
   void Draw(const glm::mat4& projection_mat, const glm::mat4& view_mat,
             const glm::mat4& model_mat, const float* color_correction4,
-            const float* object_color4) const;
+            const float* object_color4, GLuint override_texture_id = 0) const;
 
   void SetUvTransformMatrix(const glm::mat3& uv_transform) {
     uv_transform_ = uv_transform;
