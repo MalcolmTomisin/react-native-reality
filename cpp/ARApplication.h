@@ -53,6 +53,7 @@ namespace arcore
             std::string id;
             std::string anchorId;
             std::string model;
+            std::string texture; // optional URI/name of a JS-supplied texture ("" = model default)
             float scale[3] = {1.f, 1.f, 1.f};
             float color[4] = {1.f, 1.f, 1.f, 1.f};
             bool visible = true;
@@ -410,8 +411,10 @@ namespace arcore
                             renderer_it = obj_renderers_.find(desc.model + ".obj");
                         if (renderer_it != obj_renderers_.end())
                         {
+                            uint32_t override_tex =
+                                desc.texture.empty() ? 0 : GetObjectTexture(desc.texture);
                             renderer_it->second->Draw(projection_mat, view_mat, model_mat,
-                                                      color_correction, desc.color);
+                                                      color_correction, desc.color, override_tex);
                         }
                     }
                 }
@@ -564,6 +567,21 @@ namespace arcore
         {
             std::lock_guard<std::mutex> lock(objects_mutex_);
             ar_object_descs_ = std::move(new_descs);
+        }
+
+        // Registers a GL texture (uploaded on the GL thread by Kotlin) for a JS
+        // texture URI, so objects referencing that URI render with it. 0 = clear.
+        void SetObjectTexture(const std::string &uri, uint32_t gl_texture_id)
+        {
+            std::lock_guard<std::mutex> lock(object_textures_mutex_);
+            object_textures_[uri] = gl_texture_id;
+        }
+
+        uint32_t GetObjectTexture(const std::string &uri)
+        {
+            std::lock_guard<std::mutex> lock(object_textures_mutex_);
+            auto it = object_textures_.find(uri);
+            return it == object_textures_.end() ? 0 : it->second;
         }
 
         void SetFaceFilters(std::vector<FaceFilterDesc> new_descs)
@@ -1057,6 +1075,9 @@ namespace arcore
         std::vector<ARObjectDesc> ar_object_descs_;
         std::unordered_map<std::string, std::unique_ptr<ObjRenderer>> obj_renderers_;
         std::mutex objects_mutex_;
+        // JS-supplied textures: uri -> GL texture id (uploaded on the GL thread).
+        std::unordered_map<std::string, uint32_t> object_textures_;
+        std::mutex object_textures_mutex_;
         int anchor_counter_ = 0;
 
         // Unified per-frame event queue (Tier 2). All producers push here.

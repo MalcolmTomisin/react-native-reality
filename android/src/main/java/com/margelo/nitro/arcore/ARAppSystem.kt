@@ -7,11 +7,15 @@ import android.content.pm.PackageManager
 import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.opengl.GLUtils
+import android.util.Base64
 import android.util.Log
 import androidx.annotation.Keep
 import androidx.core.content.ContextCompat
 import com.facebook.jni.HybridData
+import java.net.HttpURLConnection
+import java.net.URL
 
 @Keep
 class ARAppSystem {
@@ -31,8 +35,53 @@ class ARAppSystem {
         synchronized(this) {
             if (mHybridData == null) {
                 cachedAssetManager = context.applicationContext.assets
+                cachedContext = context.applicationContext
                 mHybridData = initHybrid(context.applicationContext.assets)
             }
+        }
+    }
+
+    /**
+     * Decodes a texture from a resolved RN asset source into a Bitmap. Handles
+     * http(s) (download), file://, data: (base64), a bundled assets/ name, and an
+     * Android drawable resource name (release-build require()). Runs off the GL
+     * thread (may do network I/O); the caller uploads the result on the GL thread.
+     */
+    fun loadBitmapFromUri(uri: String): Bitmap? {
+        return try {
+            when {
+                uri.startsWith("http://") || uri.startsWith("https://") -> {
+                    val conn = (URL(uri).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 15000
+                        readTimeout = 15000
+                        doInput = true
+                    }
+                    conn.inputStream.use { BitmapFactory.decodeStream(it) }
+                }
+                uri.startsWith("data:") -> {
+                    val b64 = uri.substringAfter("base64,", "")
+                    if (b64.isEmpty()) null else {
+                        val bytes = Base64.decode(b64, Base64.DEFAULT)
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    }
+                }
+                uri.startsWith("file://") -> BitmapFactory.decodeFile(Uri.parse(uri).path)
+                else -> {
+                    // Bundled asset name, or a drawable resource name (release require()).
+                    loadImage(uri)
+                        ?: loadImage("models/$uri")
+                        ?: loadImage("models/$uri.png")
+                        ?: run {
+                            val ctx = cachedContext ?: return@run null
+                            val name = uri.substringAfterLast('/').substringBeforeLast('.')
+                            val resId = ctx.resources.getIdentifier(name, "drawable", ctx.packageName)
+                            if (resId != 0) BitmapFactory.decodeResource(ctx.resources, resId) else null
+                        }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ARAppSystem", "loadBitmapFromUri failed for $uri", e)
+            null
         }
     }
 
@@ -112,6 +161,7 @@ class ARAppSystem {
     external fun setDisplayRotation(rotation: Int)
 
     external fun setARObjects(descs: Array<ARObjectDescriptor>)
+    external fun setObjectTexture(uri: String, glTextureId: Int)
     external fun setFaceFilters(descs: Array<ARFaceFilterDescriptor>)
     external fun createAnchor(x: Float, y: Float): String
     external fun removeAnchor(anchorId: String)
@@ -125,6 +175,7 @@ class ARAppSystem {
         }
 
         private var cachedAssetManager: AssetManager? = null
+        private var cachedContext: Context? = null
 
         @JvmStatic
         fun loadImage(imageName: String): Bitmap? {
