@@ -401,7 +401,83 @@ class HybridARView: HybridARViewHybridSpec {
         entity.orientation = simd_quatf(ix: Float(r.x), iy: Float(r.y), iz: Float(r.z), r: Float(r.w))
       }
 
+      if let texture = desc.texture, !texture.isEmpty {
+        applyTexture(texture, to: entity)
+      }
+
       anchor.addChild(entity)
+    }
+  }
+
+  // MARK: - Texture loading (JS-supplied)
+
+  private var textureCache: [String: TextureResource] = [:]
+
+  /// Applies a JS-supplied texture (URI or bundled name) to every `ModelEntity`
+  /// under `entity` as an unlit base color. Loads asynchronously (may hit the
+  /// network) and caches by URI; applies once ready on the main actor.
+  private func applyTexture(_ source: String, to entity: Entity) {
+    if let tex = textureCache[source] {
+      Self.setBaseColorTexture(tex, on: entity)
+      return
+    }
+    Self.loadTextureResource(source) { [weak self, weak entity] tex in
+      guard let self, let entity, let tex else { return }
+      self.textureCache[source] = tex
+      Self.setBaseColorTexture(tex, on: entity)
+    }
+  }
+
+  private static func setBaseColorTexture(_ tex: TextureResource, on entity: Entity) {
+    var material = UnlitMaterial(color: .white)
+    material.color = .init(tint: .white, texture: .init(tex))
+    for model in modelEntities(in: entity) {
+      let count = max(1, model.model?.materials.count ?? 1)
+      model.model?.materials = Array(repeating: material, count: count)
+    }
+  }
+
+  private static func modelEntities(in entity: Entity) -> [ModelEntity] {
+    var result: [ModelEntity] = []
+    if let model = entity as? ModelEntity { result.append(model) }
+    for child in entity.children { result.append(contentsOf: modelEntities(in: child)) }
+    return result
+  }
+
+  /// Resolves a texture source to a `TextureResource`, off the main thread.
+  /// Handles `file://`, `http(s)` (download), `data:` (base64), and a bundled name.
+  private static func loadTextureResource(
+    _ source: String, completion: @escaping (TextureResource?) -> Void
+  ) {
+    func finish(_ tex: TextureResource?) { DispatchQueue.main.async { completion(tex) } }
+
+    if source.hasPrefix("http://") || source.hasPrefix("https://"), let url = URL(string: source) {
+      URLSession.shared.dataTask(with: url) { data, _, _ in
+        guard let data,
+              let img = UIImage(data: data)?.cgImage,
+              let tex = try? TextureResource.generate(from: img, options: .init(semantic: .color))
+        else { finish(nil); return }
+        finish(tex)
+      }.resume()
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if source.hasPrefix("data:") {
+        let b64 = source.components(separatedBy: "base64,").last ?? ""
+        guard let data = Data(base64Encoded: b64),
+              let img = UIImage(data: data)?.cgImage,
+              let tex = try? TextureResource.generate(from: img, options: .init(semantic: .color))
+        else { finish(nil); return }
+        finish(tex)
+      } else if source.hasPrefix("file://"), let url = URL(string: source) {
+        finish(try? TextureResource.load(contentsOf: url))
+      } else {
+        // Bundled asset name (strip any extension).
+        let name = (source as NSString).lastPathComponent
+        let base = (name as NSString).deletingPathExtension
+        finish(try? TextureResource.load(named: base.isEmpty ? name : base))
+      }
     }
   }
 
