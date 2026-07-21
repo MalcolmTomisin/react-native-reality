@@ -2546,7 +2546,7 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  ArCore: 1e0857078f72de9f4f56233c5fb715134a9ad38c
+  ArCore: b8e8b8c6787a81e634c637111ced1c5893295045
   boost: 7e761d76ca2ce687f7cc98e698152abd03a18f90
   DoubleConversion: cb417026b2400c8f53ae97020b2be961b59470cb
   fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6
