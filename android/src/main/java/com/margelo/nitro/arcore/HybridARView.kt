@@ -385,8 +385,16 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
         config: javax.microedition.khronos.egl.EGLConfig?,
     ) {
         GLES20.glClearColor(0.1f, 0.1f, 0.1f, 1.0f)
+        // Fresh EGL context: the native side (app.onGlSurfaceCreated) drops the
+        // stale uploaded-texture ids. Clear our request-dedup set and re-upload
+        // textures for the currently mounted objects so they rebind to this context.
+        requestedTextures.clear()
         app.onSurfaceCreated()
         app.onGlSurfaceCreated()
+        objects?.mapNotNull { it.texture }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.forEach { ensureObjectTexture(it) }
     }
 
     override fun onSurfaceChanged(
