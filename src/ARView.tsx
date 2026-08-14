@@ -24,46 +24,53 @@ import { ARFaceSceneContext } from './ARFaceSceneContext';
 
 const noop = (() => {}) as (...args: any[]) => void;
 
+type ARViewValidAttributes = ViewConfig<ARViewProps>['validAttributes'] & {
+  hybridRef: true;
+};
+
+const validAttributes: ARViewValidAttributes = {
+  hybridRef: true,
+  sessionType: true,
+  depthMode: true,
+  lightEstimationMode: true,
+  planeDetectionMode: true,
+  focusMode: true,
+  shaderMode: true,
+  cameraFacing: true,
+  cameraTargetFps: true,
+  cameraDepthSensorUsage: true,
+  cloudAnchorMode: true,
+  instantPlacementMode: true,
+  paused: true,
+  debugShowPlanes: true,
+  debugShowPointCloud: true,
+  debugShowWorldOrigin: true,
+  debugShowDepthMap: true,
+  debugShowFaceMesh: true,
+  objects: true,
+  faceFilters: true,
+  faceTextureURI: true,
+  onSessionStateChange: true,
+  onSessionTypeChange: true,
+  onARCoreError: true,
+  onTrackingStateChange: true,
+  onPlaneDetected: true,
+  onPlaneUpdated: true,
+  onAnchorCreated: true,
+  onTap: true,
+  onFaceDetected: true,
+  onFaceUpdated: true,
+  onFaceLost: true,
+  onBlendShapesUpdate: true,
+};
+
 const NativeARView = getHostComponent<ARViewProps, ARViewMethods>(
   'ARViewHybrid',
   (): ViewConfig<ARViewProps> => ({
     uiViewClassName: 'ARViewHybrid',
     bubblingEventTypes: {},
     directEventTypes: {},
-    validAttributes: {
-      sessionType: true,
-      depthMode: true,
-      lightEstimationMode: true,
-      planeDetectionMode: true,
-      focusMode: true,
-      shaderMode: true,
-      cameraFacing: true,
-      cameraTargetFps: true,
-      cameraDepthSensorUsage: true,
-      cloudAnchorMode: true,
-      instantPlacementMode: true,
-      paused: true,
-      debugShowPlanes: true,
-      debugShowPointCloud: true,
-      debugShowWorldOrigin: true,
-      debugShowDepthMap: true,
-      debugShowFaceMesh: true,
-      objects: true,
-      faceFilters: true,
-      faceTextureURI: true,
-      onSessionStateChange: true,
-      onSessionTypeChange: true,
-      onARCoreError: true,
-      onTrackingStateChange: true,
-      onPlaneDetected: true,
-      onPlaneUpdated: true,
-      onAnchorCreated: true,
-      onTap: true,
-      onFaceDetected: true,
-      onFaceUpdated: true,
-      onFaceLost: true,
-      onBlendShapesUpdate: true,
-    },
+    validAttributes,
   })
 );
 

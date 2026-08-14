@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   PermissionsAndroid,
   Platform,
+  AppState,
 } from 'react-native';
 import {
   ARView,
@@ -46,6 +47,26 @@ export default function App() {
   useEffect(() => {
     initialize().then(setInitialized);
   }, []);
+
+  useEffect(() => {
+    if (trackingState === 'tracking') {
+      arViewRef.current
+        ?.takeSnapshot(true)
+        .then((uri) => {
+          console.log('Snapshot saved to', uri);
+        })
+        .catch((err) => {
+          console.error('Snapshot failed:', err);
+        });
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') {
+        arViewRef.current?.destroySession();
+      }
+    });
+    return () => subscription.remove();
+  }, [trackingState]);
 
   useEffect(() => {
     if (Platform.OS === 'android') {
