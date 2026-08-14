@@ -289,6 +289,16 @@ namespace arcore
         void OnGlSurfaceCreated()
         {
             LOGI("OnGlSurfaceCreated()");
+
+            // A fresh EGL context: every previously created GL resource (model
+            // renderers + uploaded object textures) belongs to the old, now-destroyed
+            // context and is invalid. Drop them so they rebuild against this context.
+            obj_renderers_.clear();
+            {
+                std::lock_guard<std::mutex> lock(object_textures_mutex_);
+                object_textures_.clear();
+            }
+
             depth_texture_.CreateOnGlThread();
             background_renderer_.InitializeGlContent(asset_manager_, depth_texture_.GetTextureId());
 
