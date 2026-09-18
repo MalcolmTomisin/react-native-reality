@@ -6,8 +6,10 @@ import android.opengl.GLSurfaceView
 import android.opengl.GLUtils
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -15,6 +17,12 @@ import androidx.annotation.Keep
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.facebook.proguard.annotations.DoNotStrip
 import com.margelo.nitro.core.Promise
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.IOException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.suspendCoroutine
 
 @Keep
 @DoNotStrip
@@ -374,7 +382,73 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
 
     override fun takeSnapshot(saveToDisk: Boolean): Promise<String> {
         return Promise.async {
-            ""
+            val bitmap = captureSnapshot()
+            // Once capture succeeds, this scope owns and always releases the bitmap.
+            try {
+                if (saveToDisk) return@async saveSnapshot(bitmap)
+
+                ByteArrayOutputStream().use { output ->
+                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                        "Failed to encode snapshot"
+                    }
+                    Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+                }
+            } finally {
+                bitmap.recycle()
+            }
+        }
+    }
+
+    private fun saveSnapshot(bitmap: Bitmap): String {
+        val file = File.createTempFile("ar_snapshot_", ".png", reactContext.cacheDir)
+        var saved = false
+        try {
+            file.outputStream().use { output ->
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                    "Failed to encode snapshot"
+                }
+            }
+            saved = true
+            return file.absolutePath
+        } finally {
+            // Only a completely written and closed file may outlive this scope.
+            if (!saved) file.delete()
+        }
+    }
+
+    private suspend fun captureSnapshot(): Bitmap = suspendCoroutine { continuation ->
+        val posted = mainHandler.post {
+            val bitmap = runCatching {
+                val surface = glSurfaceView
+                check(viewAttached && surface.isAttachedToWindow &&
+                    surface.width > 0 && surface.height > 0 && surface.holder.surface.isValid) {
+                    "Cannot take snapshot: AR surface is not ready"
+                }
+                Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
+            }.getOrElse { error ->
+                continuation.resumeWithException(error)
+                return@post
+            }
+
+            // Capture owns the bitmap until a successful copy transfers it to the caller.
+            runCatching {
+                PixelCopy.request(glSurfaceView, bitmap, { result ->
+                    if (result != PixelCopy.SUCCESS) {
+                        bitmap.recycle()
+                        continuation.resumeWithException(
+                            IOException("Snapshot capture failed (PixelCopy error $result)"),
+                        )
+                        return@request
+                    }
+                    continuation.resume(bitmap)
+                }, mainHandler)
+            }.onFailure { error ->
+                bitmap.recycle()
+                continuation.resumeWithException(error)
+            }
+        }
+        if (!posted) {
+            continuation.resumeWithException(IllegalStateException("Snapshot handler is unavailable"))
         }
     }
 
