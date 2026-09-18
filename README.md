@@ -4,6 +4,13 @@ Native augmented reality for React Native — world & face tracking, plane detec
 
 One declarative `<ARView>` component, a small set of child components for content, and typed callbacks for everything the AR session reports — with the same JavaScript API on both platforms.
 
+## Demos
+
+Watch the example app running on physical devices:
+
+- [Android demo](docs/demos/android.mp4)
+- [iOS demo](docs/demos/ios.mp4)
+
 ## Features
 
 - **World tracking** — plane detection, hit-testing, world anchors, and anchored 3D models (`<ARObject>`).
