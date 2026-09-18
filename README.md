@@ -253,6 +253,17 @@ Accepts all `ARViewProps` below plus standard `ViewProps` (e.g. `style`) and `ch
 | `resetSession` | `() => void` |
 | `destroySession` | `() => void` |
 
+`takeSnapshot(false)` returns raw PNG base64 without a data-URL prefix.
+`takeSnapshot(true)` returns an absolute path to a unique temporary PNG in app
+cache/temporary storage; copy it elsewhere if it must be kept.
+On Android, snapshots capture the AR surface at full resolution, including the
+camera feed, AR content, and visible native debug graphics, but excluding React
+Native overlays. Capture uses the latest available frame (which may be the last
+frame while paused) and rejects if the surface is unavailable or capture fails.
+Overlapping requests run independently; full-resolution captures, especially
+base64 results, increase peak memory use. Once pixels are captured, processing
+finishes even if the view unmounts.
+
 ### `<ARObject>` (world content)
 
 Renders a model at a world anchor. Props (`ARObjectDescriptor` without `id`):
@@ -324,10 +335,10 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 - [x] Depth-map overlay (`debugShowDepthMap` / `shaderMode: 'depth'`)
 - [x] `isDepthModeSupported()`
 - [x] Canonical, platform-consistent event vocabulary
+- [x] `takeSnapshot()`
 
 **Not yet implemented**
 
-- [ ] `takeSnapshot()` (currently returns an empty string)
 - [ ] `paused` prop (pause/resume via prop)
 - [ ] `lightEstimationMode`
 - [ ] `depthMode` selection (depth is auto-enabled when supported; the prop value is ignored)
