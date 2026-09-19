@@ -54,7 +54,7 @@ android {
         arguments "-DANDROID_STL=c++_shared",
                 "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
                 "-DARCORE_LIBPATH=${arcore_libpath}/jni",
-                "-DARCORE_INCLUDE=${project.rootDir}/../../libraries/include"
+                "-DARCORE_INCLUDE=${project.projectDir}/../libraries/include"
         abiFilters (*reactNativeArchitectures())
 
         buildTypes {
