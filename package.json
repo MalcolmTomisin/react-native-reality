@@ -160,7 +160,8 @@
       "publish": true
     },
     "github": {
-      "release": true
+      "release": true,
+      "autoGenerate": true
     },
     "plugins": {
       "@release-it/conventional-changelog": {
