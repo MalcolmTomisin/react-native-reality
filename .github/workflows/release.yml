@@ -1,0 +1,69 @@
+name: Release
+
+# Publishes to npm via Trusted Publishing (OIDC) — no NPM_TOKEN.
+# The trusted publisher on npmjs.com must reference this exact workflow file
+# (MalcolmTomisin/react-native-reality → release.yml).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version bump: patch | minor | major | an explicit version (e.g. 0.2.0). Leave blank to derive from conventional commits.'
+        required: false
+        default: ''
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push the release commit + tag and create the GitHub Release
+  id-token: write # required for npm Trusted Publishing (OIDC) + provenance
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate release token
+        # App token so the release push/tag bypasses the branch ruleset
+        # (the App is a bypass actor). Token is minted per-run and auto-revoked.
+        id: app-token
+        uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2.0.6
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0 # release-it / conventional-changelog need full history + tags
+          token: ${{ steps.app-token.outputs.token }} # push as the App (ruleset bypass)
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Upgrade npm for Trusted Publishing
+        # OIDC trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.
+        run: npm install -g npm@latest
+
+      - name: Build package
+        run: yarn prepare
+
+      - name: Verify npm package contents
+        run: yarn check:package
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }} # create the GitHub Release as the App
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            yarn release:ci --increment "${{ inputs.version }}"
+          else
+            yarn release:ci
+          fi
