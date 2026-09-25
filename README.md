@@ -205,7 +205,7 @@ So `model="andy"` loads `models/andy.obj` on Android and `andy.usdz` on iOS.
 
 | Function | Returns | Description |
 |---|---|---|
-| `initialize()` | `Promise<boolean>` | On Android, now prompts for ARCore install/update when needed and waits for the result: `true` when ready, `false` if unsupported or installation is cancelled/incomplete; rejects on errors. Call from a resumed Activity. iOS currently resolves `true`. |
+| `initialize()` | `Promise<boolean>` | On Android, checks ARCore readiness and may prompt for installation/update. Resolves `true` when ready, or `false` when unsupported or installation is cancelled/incomplete. Rejects on unexpected errors, availability-check timeout, or a new attempt without a resumed Activity. iOS currently resolves `true`. |
 | `isDepthModeSupported()` | `boolean` | Whether the device supports depth. |
 | `isGeospatialModeSupported()` | `boolean` | Whether the device supports geospatial mode. |
 
