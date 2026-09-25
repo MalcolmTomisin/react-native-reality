@@ -205,7 +205,7 @@ So `model="andy"` loads `models/andy.obj` on Android and `andy.usdz` on iOS.
 
 | Function | Returns | Description |
 |---|---|---|
-| `initialize()` | `Promise<boolean>` | On Android, checks ARCore readiness and may prompt for installation/update. Resolves `true` when ready, or `false` when unsupported or installation is cancelled/incomplete. Rejects on unexpected errors, availability-check timeout, or a new attempt without a resumed Activity. iOS currently resolves `true`. |
+| `initialize()` | `Promise<boolean>` | On Android, checks ARCore readiness and may prompt for installation/update. Resolves `true` when ready, or `false` when unsupported or installation is cancelled/incomplete. Rejects on unexpected errors, availability-check timeout, or a new attempt without a resumed Activity. On iOS, resolves whether ARKit world tracking is supported. |
 | `isDepthModeSupported()` | `boolean` | Whether the device supports depth. |
 | `isGeospatialModeSupported()` | `boolean` | Whether the device supports geospatial mode. |
 
