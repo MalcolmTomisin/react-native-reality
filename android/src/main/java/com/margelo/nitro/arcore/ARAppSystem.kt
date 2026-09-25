@@ -119,7 +119,7 @@ class ARAppSystem {
             if (isSessionInitialized()) {
                 ARViewRegistry.emitSessionType(getActiveSessionType())
                 ARViewRegistry.emitSessionState("ready")
-            } else {
+            } else if (!ARCoreLifecycle.isInitializationPending()) {
                 ARViewRegistry.emitSessionState("failed")
             }
         }

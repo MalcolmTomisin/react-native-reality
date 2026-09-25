@@ -9,7 +9,7 @@ import com.margelo.nitro.arcore.views.HybridARViewHybridManager
 
 class ArCorePackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return emptyList()
+        return listOf(ARCoreLifecycle.get(reactContext))
     }
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<out View, *>> {

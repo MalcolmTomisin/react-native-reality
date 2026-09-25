@@ -33,7 +33,6 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
     private var viewAttached = false
 
     init {
-        CurrentActivityTracker.register(reactContext.applicationContext as android.app.Application)
         app.ensureInitialized(reactContext.applicationContext)
         registerAppLifecycleObserver(reactContext.applicationContext)
     }
@@ -281,10 +280,26 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
         glSurfaceView.onResume()
     }
 
+    fun onInitializationComplete(taskId: Int, ready: Boolean, error: String) {
+        if (!viewAttached || !reactContext.hasActiveReactInstance()) return
+        val activity = reactContext.currentActivity ?: return
+        if (activity.taskId != taskId) return
+        if (ready) {
+            app.onResume(activity.applicationContext, activity)
+            glSurfaceView.onResume()
+        } else {
+            onSessionStateChange?.invoke("failed")
+            if (error.isNotEmpty()) onARCoreError?.invoke(ARError("initialization_failed", error))
+        }
+    }
+
     override fun cameraPermissionGranted() {
-        val activity = reactContext.currentActivity
-            ?: CurrentActivityTracker.getCurrentActivity() ?: return
-        app.onResume(activity.applicationContext, activity)
+        mainHandler.post {
+            if (!viewAttached) return@post
+            val activity = reactContext.currentActivity
+                ?: CurrentActivityTracker.getCurrentActivity() ?: return@post
+            app.onResume(activity.applicationContext, activity)
+        }
     }
 
     // Recreates the session when the augmentation type or camera facing changes at

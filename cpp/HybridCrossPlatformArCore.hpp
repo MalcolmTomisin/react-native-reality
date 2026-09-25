@@ -10,7 +10,7 @@ class HybridCrossPlatformArCore : public HybridCrossPlatformArCoreSpec
 public:
   HybridCrossPlatformArCore() : HybridObject(TAG) {}
 
-  std::shared_ptr<Promise<bool>> initialize() override;
+  std::shared_ptr<Promise<bool>> initialize(double runtimeId) override;
   bool isDepthModeSupported() override;
   bool isGeospatialModeSupported() override;
 };

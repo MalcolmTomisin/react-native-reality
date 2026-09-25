@@ -1066,7 +1066,6 @@ namespace arcore
                                             const ArFrame *frame);
         ArFrame *ar_frame_ = nullptr;
 
-        bool install_requested_ = false;
         bool calculate_uv_transform_ = false;
         int width_ = 1;
         int height_ = 1;

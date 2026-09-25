@@ -15,6 +15,7 @@ add_library(${PACKAGE_NAME} SHARED
         ../cpp/Texture.cpp
         ../cpp/utils.cpp
         ../cpp/AndroidPlatformServices.cpp
+        ../cpp/ARCoreInitialization.cpp
         ../cpp/ARSessionManager.cpp
 )
 
