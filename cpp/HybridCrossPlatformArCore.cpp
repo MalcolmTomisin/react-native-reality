@@ -8,13 +8,12 @@
 
 namespace margelo::nitro::arcore {
 
-std::shared_ptr<Promise<bool>> HybridCrossPlatformArCore::initialize()
+std::shared_ptr<Promise<bool>> HybridCrossPlatformArCore::initialize(double runtimeId)
 {
 #ifdef __ANDROID__
-  return Promise<bool>::async([]() {
-    return ::arcore::checkARCoreAvailability();
-  });
+  return ::arcore::initializeARCore(static_cast<int64_t>(runtimeId));
 #else
+  (void)runtimeId;
   return Promise<bool>::async([]() {
     return true;
   });
