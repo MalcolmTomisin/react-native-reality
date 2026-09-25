@@ -44,7 +44,8 @@
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
     "release": "release-it --only-version",
     "release:ci": "release-it --ci",
-    "test": "jest"
+    "test": "jest",
+    "test:android-initialization": "bash scripts/test-arcore-initialization.sh"
   },
   "keywords": [
     "react-native",
