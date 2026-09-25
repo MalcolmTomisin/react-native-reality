@@ -4,6 +4,8 @@
 #include "ARSessionManager.h"
 #include "ARCoreAvailability.h"
 #include "arcore_c_api.h"
+#else
+#include "../ios/ARKitAvailability.h"
 #endif
 
 namespace margelo::nitro::arcore {
@@ -15,7 +17,7 @@ std::shared_ptr<Promise<bool>> HybridCrossPlatformArCore::initialize(double runt
 #else
   (void)runtimeId;
   return Promise<bool>::async([]() {
-    return true;
+    return ::arcore::isWorldTrackingSupported();
   });
 #endif
 }
