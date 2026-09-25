@@ -60,6 +60,11 @@ object ARViewRegistry {
     }
 
     /** Resumes GL rendering on every mounted view (app returning to foreground). */
+    fun onInitializationComplete(taskId: Int, ready: Boolean, error: String) {
+        val snapshot: List<HybridARView> = synchronized(this) { views.toList() }
+        snapshot.forEach { it.onInitializationComplete(taskId, ready, error) }
+    }
+
     fun resumeGl() {
         val snapshot: List<HybridARView> = synchronized(this) { views.toList() }
         snapshot.forEach { it.resumeGl() }

@@ -57,18 +57,9 @@ class ArSessionManager {
   // Whether a session has been created.
   bool IsInitialized() const { return ar_session_ != nullptr; }
 
-  void SetInstallRequested(bool requested) {
-    install_requested_ = requested;
-  }
-
-  bool IsInstallRequested() const {
-    return install_requested_;
-  }
-
  private:
   ArSessionManager() = default;
   ~ArSessionManager() = default;
 
   ArSession* ar_session_ = nullptr;
-  bool install_requested_ = false;
 };
