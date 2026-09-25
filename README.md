@@ -205,7 +205,7 @@ So `model="andy"` loads `models/andy.obj` on Android and `andy.usdz` on iOS.
 
 | Function | Returns | Description |
 |---|---|---|
-| `initialize()` | `Promise<boolean>` | Checks AR availability; resolve before rendering an `ARView`. |
+| `initialize()` | `Promise<boolean>` | On Android, checks ARCore availability without opening installation UI: `true` if supported and installed, `false` if unsupported, missing, or outdated; rejects on errors/timeouts. iOS currently resolves `true`. |
 | `isDepthModeSupported()` | `boolean` | Whether the device supports depth. |
 | `isGeospatialModeSupported()` | `boolean` | Whether the device supports geospatial mode. |
 
@@ -358,7 +358,7 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 - [ ] Face-mesh overlay (`debugShowFaceMesh`)
 - [ ] Face-texture overlay (`faceTextureURI`)
 - [ ] `<ARObject>` `texture` prop
-- [ ] Real availability check in `initialize()` / ARCore install flow (currently always resolves `true`)
+- [x] Android ARCore availability check in `initialize()`
 - [ ] Blend shapes — not exposed by ARCore (iOS-only capability)
 
 ### iOS (ARKit / RealityKit)

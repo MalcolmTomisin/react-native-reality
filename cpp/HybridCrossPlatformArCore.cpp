@@ -2,6 +2,7 @@
 
 #ifdef __ANDROID__
 #include "ARSessionManager.h"
+#include "ARCoreAvailability.h"
 #include "arcore_c_api.h"
 #endif
 
@@ -9,9 +10,15 @@ namespace margelo::nitro::arcore {
 
 std::shared_ptr<Promise<bool>> HybridCrossPlatformArCore::initialize()
 {
+#ifdef __ANDROID__
+  return Promise<bool>::async([]() {
+    return ::arcore::checkARCoreAvailability();
+  });
+#else
   return Promise<bool>::async([]() {
     return true;
   });
+#endif
 }
 
 bool HybridCrossPlatformArCore::isDepthModeSupported()
