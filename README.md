@@ -342,6 +342,7 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 - [x] `isDepthModeSupported()`
 - [x] Canonical, platform-consistent event vocabulary
 - [x] `takeSnapshot()`
+- [x] Android ARCore availability check and install/update flow in `initialize()`
 
 **Not yet implemented**
 
@@ -358,7 +359,6 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 - [ ] Face-mesh overlay (`debugShowFaceMesh`)
 - [ ] Face-texture overlay (`faceTextureURI`)
 - [ ] `<ARObject>` `texture` prop
-- [x] Android ARCore availability check and install/update flow in `initialize()`
 - [ ] Blend shapes — not exposed by ARCore (iOS-only capability)
 
 ### iOS (ARKit / RealityKit)
@@ -380,10 +380,11 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 - [x] Debug overlays: `debugShowPlanes`, `debugShowPointCloud`, `debugShowWorldOrigin`
 - [x] `takeSnapshot()`
 - [x] Canonical, platform-consistent event vocabulary
+- [x] Imperative `ref` methods reachable from JS (`hitTest`, `createAnchor`, `removeAnchor`, `resetSession`, `destroySession`) — native view-ref wiring
 
 **Not yet implemented**
 
-- [ ] Imperative `ref` methods reachable from JS (`hitTest`, `createAnchor`, `removeAnchor`, `resetSession`, `destroySession`) — native view-ref wiring
+
 - [ ] `<ARObject>` `color` and `texture`
 - [ ] Depth-map / `shaderMode` overlay (`debugShowDepthMap`)
 - [ ] `focusMode`
