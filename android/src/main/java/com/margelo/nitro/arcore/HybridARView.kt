@@ -259,9 +259,21 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
     // --- Methods ---
 
     override fun resetSession() {
-        onSessionStateChange?.invoke("destroying")
-        app.destroySession()
-        onSessionStateChange?.invoke("destroyed")
+        mainHandler.post {
+            if (!viewAttached) return@post
+            val activity = reactContext.currentActivity
+                ?: CurrentActivityTracker.getCurrentActivity() ?: return@post
+
+            glSurfaceView.onPause()
+            try {
+                onSessionStateChange?.invoke("destroying")
+                app.destroySession()
+                onSessionStateChange?.invoke("destroyed")
+                app.onResume(activity.applicationContext, activity)
+            } finally {
+                glSurfaceView.onResume()
+            }
+        }
     }
 
     override fun destroySession() {
