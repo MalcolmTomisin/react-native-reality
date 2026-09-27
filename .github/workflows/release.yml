@@ -49,8 +49,8 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Upgrade npm for Trusted Publishing
-        # OIDC trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.
-        run: npm install -g npm@latest
+        # OIDC needs npm >= 11.5.1; pin a version compatible with .nvmrc.
+        run: npm install -g npm@11.6.2
 
       - name: Build package
         run: yarn prepare
