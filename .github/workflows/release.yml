@@ -1,8 +1,8 @@
 name: Release
 
-# Publishes to npm via Trusted Publishing (OIDC) — no NPM_TOKEN.
-# The trusted publisher on npmjs.com must reference this exact workflow file
-# (MalcolmTomisin/react-native-reality → release.yml).
+# Publishes to npm using a granular access token (secrets.NPM_TOKEN).
+# The package's Publishing access must allow "a granular access token with
+# bypass 2fa enabled". Provenance is still generated via id-token: write.
 on:
   workflow_dispatch:
     inputs:
@@ -17,7 +17,7 @@ concurrency:
 
 permissions:
   contents: write # push the release commit + tag and create the GitHub Release
-  id-token: write # required for npm Trusted Publishing (OIDC) + provenance
+  id-token: write # for npm provenance (--provenance) when publishing
 
 jobs:
   release:
@@ -48,23 +48,10 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
-      - name: Upgrade npm for Trusted Publishing
-        # OIDC needs npm >= 11.5.1; pin a version compatible with .nvmrc.
-        run: npm install -g npm@11.6.2
-
-      - name: Debug OIDC claims (temporary — remove after fixing)
-        run: |
-          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
-            echo "::error::No OIDC env — id-token: write not effective for this job"; exit 1
-          fi
-          echo "npm version: $(npm -v)"
-          token=$(curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org" | jq -r '.value')
-          payload=$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+')
-          while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="${payload}="; done
-          echo "----- OIDC claims npm will match against -----"
-          printf '%s' "$payload" | base64 -d | jq '{repository, repository_owner, workflow_ref, ref, environment, sub}'
-          echo "----------------------------------------------"
+      - name: Authenticate npm (granular access token)
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Build package
         run: yarn prepare
@@ -75,7 +62,7 @@ jobs:
       - name: Release
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }} # create the GitHub Release as the App
-          NPM_CONFIG_LOGLEVEL: verbose # temporary — surfaces the OIDC exchange; remove after fixing
+          NPM_CONFIG_PROVENANCE: "true" # generate provenance (needs id-token: write)
         run: |
           if [ -n "${{ inputs.version }}" ]; then
             yarn release:ci --increment "${{ inputs.version }}"
