@@ -1,6 +1,6 @@
 {
   "name": "react-native-reality",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Native augmented reality for React Native — world & face tracking, plane detection, hit-testing, and 3D content on iOS (ARKit) and Android (ARCore), powered by Nitro Modules.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
