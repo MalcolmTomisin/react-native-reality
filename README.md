@@ -1,5 +1,9 @@
 # react-native-reality
 
+[![npm version](https://img.shields.io/npm/v/react-native-reality.svg)](https://www.npmjs.com/package/react-native-reality)
+[![npm downloads](https://img.shields.io/npm/dm/react-native-reality.svg)](https://www.npmjs.com/package/react-native-reality)
+[![License: MIT](https://img.shields.io/npm/l/react-native-reality.svg)](./LICENSE)
+
 Native augmented reality for React Native — world & face tracking, plane detection, hit-testing, and 3D content on iOS (ARKit / RealityKit) and Android (ARCore), powered by [Nitro Modules](https://nitro.margelo.com/).
 
 One declarative `<ARView>` component, a small set of child components for content, and typed callbacks for everything the AR session reports — with the same JavaScript API on both platforms.
