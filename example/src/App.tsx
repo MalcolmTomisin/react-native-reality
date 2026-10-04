@@ -43,6 +43,7 @@ export default function App() {
   const [blendShapeInfo, setBlendShapeInfo] = useState('');
   const [sessionState, setSessionState] = useState('');
   const [activeType, setActiveType] = useState('');
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     initialize().then(setInitialized);
@@ -180,6 +181,12 @@ export default function App() {
     setMode((m) => (m === 'world' ? 'face' : 'world'));
   }, [resetUiState]);
 
+  // Drives the `paused` prop: true releases the camera + motion tracking and
+  // freezes the last frame; false resumes the same session (anchors preserved).
+  const handleTogglePause = useCallback(() => {
+    setPaused((p) => !p);
+  }, []);
+
   if (!initialized) {
     return (
       <View style={styles.centered}>
@@ -203,6 +210,7 @@ export default function App() {
           ref={arViewRef}
           style={styles.arView}
           sessionType="world"
+          paused={paused}
           planeDetectionMode="both"
           depthMode={depthSupported ? 'automatic' : 'disabled'}
           lightEstimationMode="environmentalHDR"
@@ -236,6 +244,7 @@ export default function App() {
           ref={arViewRef}
           style={styles.arView}
           sessionType="face"
+          paused={paused}
           cameraFacing="front"
           lightEstimationMode="environmentalHDR"
           onSessionStateChange={onSessionStateChange}
@@ -304,23 +313,33 @@ export default function App() {
               {mode === 'world' ? 'Face Mode' : 'World Mode'}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, paused && styles.buttonActive]}
+            onPress={handleTogglePause}
+          >
+            <Text style={styles.buttonText}>{paused ? 'Resume' : 'Pause'}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.button} onPress={handleReset}>
             <Text style={styles.buttonText}>Reset</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {(sessionState === 'initializing' ||
-        sessionState === 'destroying' ||
-        sessionState === 'paused') && (
+      {(sessionState === 'initializing' || sessionState === 'destroying') && (
         <View style={styles.loadingOverlay}>
           <Text style={styles.loadingText}>
             {sessionState === 'initializing'
               ? 'Starting AR session...'
-              : sessionState === 'paused'
-              ? 'Session paused'
               : 'Stopping AR session...'}
           </Text>
+        </View>
+      )}
+
+      {/* Compact badge (not a full-screen overlay) so the frozen last frame
+          stays visible while paused — the point of the pause feature. */}
+      {paused && (
+        <View style={styles.pausedBadge} pointerEvents="none">
+          <Text style={styles.pausedBadgeText}>⏸ Paused — frame frozen</Text>
         </View>
       )}
     </View>
@@ -377,6 +396,26 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     alignItems: 'center',
+  },
+  buttonActive: {
+    backgroundColor: '#E53935',
+  },
+  pausedBadge: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  pausedBadgeText: {
+    color: '#FFD54F',
+    fontSize: 15,
+    fontWeight: '700',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    overflow: 'hidden',
   },
   buttonText: {
     color: '#fff',

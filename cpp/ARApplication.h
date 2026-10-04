@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <string>
 #include <set>
@@ -211,13 +212,15 @@ namespace arcore
                 ArConfig_destroy(ar_config);
 
                 ArSession_setDisplayGeometry(ArSessionManager::Instance().Get(), display_rotation_, width_, height_);
-                ArSessionManager::Instance().Resume();
+                if (!is_paused_)
+                    ArSessionManager::Instance().Resume();
                 return;
             }
 
             if (active_view_count_ > 0 && ArSessionManager::Instance().IsInitialized())
             {
-                ArSessionManager::Instance().Resume();
+                if (!is_paused_)
+                    ArSessionManager::Instance().Resume();
                 return;
             }
 
@@ -227,7 +230,7 @@ namespace arcore
         void OnARViewMounted()
         {
             active_view_count_++;
-            if (activity_resumed_ && ArSessionManager::Instance().IsInitialized())
+            if (activity_resumed_ && !is_paused_ && ArSessionManager::Instance().IsInitialized())
             {
                 ArSessionManager::Instance().Resume();
             }
@@ -328,6 +331,9 @@ namespace arcore
 
             ArSession *session = ArSessionManager::Instance().Get();
             if (session == nullptr || ar_frame_ == nullptr)
+                return;
+
+            if (is_paused_)
                 return;
 
             ArSession_setCameraTextureName(session, background_renderer_.GetTextureId());
@@ -540,7 +546,22 @@ namespace arcore
             }
         }
 
-        void SetPaused(jboolean /*paused*/) {}
+        void SetPaused(jboolean paused)
+        {
+            bool shouldPause = (paused == JNI_TRUE);
+            if (is_paused_ == shouldPause)
+                return;
+            is_paused_ = shouldPause;
+
+            if (shouldPause)
+            {
+                ArSessionManager::Instance().Pause();
+            }
+            else if (activity_resumed_ && active_view_count_ > 0)
+            {
+                ArSessionManager::Instance().Resume();
+            }
+        }
         void SetPlaneDetectionEnabled(jboolean /*enabled*/) {}
         void SetLightEstimationEnabled(jboolean /*enabled*/) {}
 
@@ -1061,6 +1082,8 @@ namespace arcore
         std::unique_ptr<AndroidPlatformServices> platformServices_;
         int active_view_count_ = 0;
         bool activity_resumed_ = false;
+
+        std::atomic<bool> is_paused_{false};
 
         glm::mat3 GetTextureTransformMatrix(const ArSession *session,
                                             const ArFrame *frame);

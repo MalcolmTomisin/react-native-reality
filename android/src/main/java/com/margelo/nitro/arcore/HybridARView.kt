@@ -32,6 +32,8 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
     private val app = ARAppSystem.instance
     private var viewAttached = false
 
+    private var propPaused = false
+
     init {
         app.ensureInitialized(reactContext.applicationContext)
         registerAppLifecycleObserver(reactContext.applicationContext)
@@ -186,7 +188,23 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
     override var paused: Boolean? = null
         set(value) {
             field = value
-            value?.let { app.setPaused(it) }
+            val shouldPause = value == true
+            mainHandler.post {
+                if (!viewAttached) return@post
+                if (shouldPause == propPaused) return@post
+                propPaused = shouldPause
+                if (shouldPause) {
+
+                    glSurfaceView.onPause()
+                    app.setPaused(true)
+                    onSessionStateChange?.invoke("paused")
+                } else {
+
+                    app.setPaused(false)
+                    glSurfaceView.onResume()
+                    onSessionStateChange?.invoke("ready")
+                }
+            }
         }
 
     override var debugShowPlanes: Boolean? = null
@@ -289,6 +307,8 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
 
     /** Resumes this view's GL rendering; called from the app lifecycle observer. */
     fun resumeGl() {
+
+        if (paused == true) return
         glSurfaceView.onResume()
     }
 
@@ -297,8 +317,17 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
         val activity = reactContext.currentActivity ?: return
         if (activity.taskId != taskId) return
         if (ready) {
-            app.onResume(activity.applicationContext, activity)
-            glSurfaceView.onResume()
+            if (paused == true) {
+
+                app.setPaused(true)
+                app.onResume(activity.applicationContext, activity)
+                glSurfaceView.onPause()
+                propPaused = true
+                onSessionStateChange?.invoke("paused")
+            } else {
+                app.onResume(activity.applicationContext, activity)
+                glSurfaceView.onResume()
+            }
         } else {
             onSessionStateChange?.invoke("failed")
             if (error.isNotEmpty()) onARCoreError?.invoke(ARError("initialization_failed", error))
@@ -332,7 +361,10 @@ class HybridARView(private val reactContext: com.facebook.react.uimanager.Themed
         glSurfaceView.onPause()
         app.destroySession()
         app.onResume(appCtx, activity)
-        glSurfaceView.onResume()
+        
+        if (paused != true) {
+            glSurfaceView.onResume()
+        }
     }
 
     private fun scheduleReconfigure() {
