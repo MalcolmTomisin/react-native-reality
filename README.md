@@ -347,10 +347,10 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 - [x] Canonical, platform-consistent event vocabulary
 - [x] `takeSnapshot()`
 - [x] Android ARCore availability check and install/update flow in `initialize()`
+- [x] `paused` prop (pause/resume via prop)
 
 **Not yet implemented**
 
-- [ ] `paused` prop (pause/resume via prop)
 - [ ] `lightEstimationMode`
 - [ ] `depthMode` selection (depth is auto-enabled when supported; the prop value is ignored)
 - [ ] `focusMode`
