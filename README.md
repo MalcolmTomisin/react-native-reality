@@ -352,7 +352,6 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 
 **Not yet implemented**
 
-- [ ] `environmentalHDR` cubemap reflections (image-based specular; diffuse main-light + spherical-harmonics lighting is implemented)
 - [ ] `depthMode` selection (depth is auto-enabled when supported; the prop value is ignored)
 - [ ] `focusMode`
 - [ ] `cameraTargetFps`
