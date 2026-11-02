@@ -47,6 +47,17 @@ class ObjRenderer {
   void SetMaterialProperty(float ambient, float diffuse, float specular,
                            float specular_power);
 
+  // Supplies Environmental HDR lighting (ARCore world space) for subsequent
+  // Draw calls: the main directional light direction (3 floats) and intensity
+  // (3 floats), and the 9 ambient spherical-harmonics coefficients (27 floats,
+  // already scaled for irradiance). Enables the HDR shading path.
+  void SetHdrLighting(const float* main_light_direction3,
+                      const float* main_light_intensity3,
+                      const float* spherical_harmonics27);
+
+  // Reverts subsequent Draw calls to the ambient-intensity / legacy path.
+  void ClearHdrLighting() { hdr_lighting_enabled_ = false; }
+
   // Draws the model. When `override_texture_id` is non-zero it is used instead of
   // the model's baked-in texture (e.g. a texture supplied from JavaScript).
   void Draw(const glm::mat4& projection_mat, const glm::mat4& view_mat,
@@ -86,6 +97,13 @@ class ObjRenderer {
   float specular_ = 0.5f;
   float specular_power_ = 6.0f;
 
+  // Environmental HDR lighting state (ARCore world space), set per-frame by the
+  // caller via SetHdrLighting / ClearHdrLighting.
+  bool hdr_lighting_enabled_ = false;
+  float hdr_main_light_direction_[3] = {0.0f, 1.0f, 0.0f};
+  float hdr_main_light_intensity_[3] = {0.0f, 0.0f, 0.0f};
+  float hdr_spherical_harmonics_[27] = {0.0f};
+
   // Model attribute arrays
   std::vector<GLfloat> vertices_;
   std::vector<GLfloat> uvs_;
@@ -110,6 +128,11 @@ class ObjRenderer {
   GLint material_param_uniform_;
   GLint color_correction_param_uniform_;
   GLint color_uniform_;
+  GLint use_hdr_uniform_;
+  GLint view_inverse_uniform_;
+  GLint main_light_direction_uniform_;
+  GLint main_light_intensity_uniform_;
+  GLint spherical_harmonics_uniform_;
   GLint depth_texture_uniform_;
   GLint depth_uv_transform_uniform_;
   GLint depth_aspect_ratio_uniform_;

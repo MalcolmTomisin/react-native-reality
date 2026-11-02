@@ -16,6 +16,8 @@
 
 #include "ObjRenderer.h"
 
+#include <cstring>
+
 #include "utils.h"
 
 namespace arcore {
@@ -92,6 +94,17 @@ void ObjRenderer::compileAndLoadShaderProgram(AAssetManager* asset_manager) {
       glGetUniformLocation(shader_program_, "u_ColorCorrectionParameters");
   color_uniform_ = glGetUniformLocation(shader_program_, "u_ObjColor");
 
+  // Environmental HDR lighting uniforms.
+  use_hdr_uniform_ = glGetUniformLocation(shader_program_, "u_UseHdrLighting");
+  view_inverse_uniform_ =
+      glGetUniformLocation(shader_program_, "u_ViewInverse");
+  main_light_direction_uniform_ =
+      glGetUniformLocation(shader_program_, "u_MainLightDirection");
+  main_light_intensity_uniform_ =
+      glGetUniformLocation(shader_program_, "u_MainLightIntensity");
+  spherical_harmonics_uniform_ =
+      glGetUniformLocation(shader_program_, "u_SphericalHarmonics[0]");
+
   // Occlusion Uniforms.
   if (use_depth_for_occlusion_) {
     depth_texture_uniform_ =
@@ -109,6 +122,18 @@ void ObjRenderer::SetMaterialProperty(float ambient, float diffuse,
   diffuse_ = diffuse;
   specular_ = specular;
   specular_power_ = specular_power;
+}
+
+void ObjRenderer::SetHdrLighting(const float* main_light_direction3,
+                                 const float* main_light_intensity3,
+                                 const float* spherical_harmonics27) {
+  std::memcpy(hdr_main_light_direction_, main_light_direction3,
+              sizeof(hdr_main_light_direction_));
+  std::memcpy(hdr_main_light_intensity_, main_light_intensity3,
+              sizeof(hdr_main_light_intensity_));
+  std::memcpy(hdr_spherical_harmonics_, spherical_harmonics27,
+              sizeof(hdr_spherical_harmonics_));
+  hdr_lighting_enabled_ = true;
 }
 
 void ObjRenderer::Draw(const glm::mat4& projection_mat,
@@ -140,6 +165,18 @@ void ObjRenderer::Draw(const glm::mat4& projection_mat,
               specular_power_);
   glUniform4fv(color_correction_param_uniform_, 1, color_correction4);
   glUniform4fv(color_uniform_, 1, object_color4);
+
+  // Environmental HDR lighting. When disabled the shader falls back to the
+  // ambient-intensity / legacy path, so the extra uniforms can be skipped.
+  glUniform1i(use_hdr_uniform_, hdr_lighting_enabled_ ? 1 : 0);
+  if (hdr_lighting_enabled_) {
+    glm::mat4 view_inverse = glm::inverse(view_mat);
+    glUniformMatrix4fv(view_inverse_uniform_, 1, GL_FALSE,
+                       glm::value_ptr(view_inverse));
+    glUniform3fv(main_light_direction_uniform_, 1, hdr_main_light_direction_);
+    glUniform3fv(main_light_intensity_uniform_, 1, hdr_main_light_intensity_);
+    glUniform3fv(spherical_harmonics_uniform_, 9, hdr_spherical_harmonics_);
+  }
 
   glUniformMatrix4fv(mvp_mat_uniform_, 1, GL_FALSE, glm::value_ptr(mvp_mat));
   glUniformMatrix4fv(mv_mat_uniform_, 1, GL_FALSE, glm::value_ptr(mv_mat));
