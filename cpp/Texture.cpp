@@ -37,10 +37,13 @@ void Texture::CreateOnGlThread() {
 }
 
 void Texture::UpdateWithDepthImageOnGlThread(const ArSession& session,
-                                             const ArFrame& frame) {
+                                             const ArFrame& frame,
+                                             bool use_raw) {
   ArImage* depth_image = nullptr;
-  if (ArFrame_acquireDepthImage16Bits(&session, &frame, &depth_image) !=
-      AR_SUCCESS) {
+  ArStatus status =
+      use_raw ? ArFrame_acquireRawDepthImage16Bits(&session, &frame, &depth_image)
+              : ArFrame_acquireDepthImage16Bits(&session, &frame, &depth_image);
+  if (status != AR_SUCCESS) {
     // No depth image received for this frame.
     return;
   }

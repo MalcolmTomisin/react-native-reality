@@ -185,14 +185,22 @@ namespace arcore
                 }
                 else
                 {
-                    int32_t is_depth_supported = 0;
-                    ArSession_isDepthModeSupported(ArSessionManager::Instance().Get(),
-                        AR_DEPTH_MODE_AUTOMATIC, &is_depth_supported);
-                    if (is_depth_supported)
+                    // Depth (world sessions only). Honor the requested mode,
+                    // falling back to disabled when the device doesn't support it.
+                    ArDepthMode depth_config = AR_DEPTH_MODE_DISABLED;
+                    if (depth_mode_ == "automatic" || depth_mode_ == "raw")
                     {
-                        ArConfig_setDepthMode(ArSessionManager::Instance().Get(), ar_config,
-                            AR_DEPTH_MODE_AUTOMATIC);
+                        ArDepthMode requested = (depth_mode_ == "raw")
+                            ? AR_DEPTH_MODE_RAW_DEPTH_ONLY
+                            : AR_DEPTH_MODE_AUTOMATIC;
+                        int32_t is_depth_supported = 0;
+                        ArSession_isDepthModeSupported(ArSessionManager::Instance().Get(),
+                            requested, &is_depth_supported);
+                        if (is_depth_supported)
+                            depth_config = requested;
                     }
+                    ArConfig_setDepthMode(ArSessionManager::Instance().Get(), ar_config,
+                        depth_config);
 
                     ArPlaneFindingMode plane_mode = AR_PLANE_FINDING_MODE_HORIZONTAL_AND_VERTICAL;
                     if (plane_detection_mode_ == "none")
@@ -354,14 +362,10 @@ namespace arcore
             }
 
             // Depth is world-only; the front-camera face session has no depth image.
-            if (session_type_ != "face")
+            if (session_type_ != "face" && depth_mode_ != "disabled")
             {
-                int32_t is_depth_supported = 0;
-                ArSession_isDepthModeSupported(session, AR_DEPTH_MODE_AUTOMATIC, &is_depth_supported);
-                if (is_depth_supported)
-                {
-                    depth_texture_.UpdateWithDepthImageOnGlThread(*session, *ar_frame_);
-                }
+                depth_texture_.UpdateWithDepthImageOnGlThread(
+                    *session, *ar_frame_, /*use_raw=*/depth_mode_ == "raw");
             }
 
             ArCamera *ar_camera;
@@ -644,7 +648,11 @@ namespace arcore
             camera_facing_ = facing;
             std::transform(camera_facing_.begin(), camera_facing_.end(), camera_facing_.begin(), ::tolower);
         }
-        void SetDepthMode(const std::string & /*depthMode*/) {}
+        void SetDepthMode(const std::string &depthMode) {
+            depth_mode_ = depthMode;
+            std::transform(depth_mode_.begin(), depth_mode_.end(),
+                           depth_mode_.begin(), ::tolower);
+        }
         void SetCloudAnchorMode(const std::string & /*cloudAnchorMode*/) {}
         void SetInstantPlacementMode(const std::string & /*instantPlacementMode*/) {}
         void SetLightEstimationMode(const std::string &lightEstimationMode) {
@@ -1175,6 +1183,9 @@ namespace arcore
         bool debug_show_depth_map_ = false;
         std::string session_type_;
         std::string camera_facing_ = "back";
+        // Lowercased ARDepthMode enum name ("disabled" | "automatic" | "raw").
+        // Applied to the ARCore config at session (re)creation.
+        std::string depth_mode_ = "disabled";
 
         AAssetManager *const asset_manager_;
 

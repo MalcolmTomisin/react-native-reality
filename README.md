@@ -223,7 +223,7 @@ Accepts all `ARViewProps` below plus standard `ViewProps` (e.g. `style`) and `ch
 |---|---|---|
 | `sessionType` | `'world' \| 'face'` | Drives the camera (world→back, face→front). Default `'world'`. |
 | `planeDetectionMode` | `'horizontal' \| 'vertical' \| 'both' \| 'none'` | World only. |
-| `depthMode` | `'disabled' \| 'automatic' \| 'raw' \| 'geospatial'` | |
+| `depthMode` | `'disabled' \| 'automatic' \| 'raw'` | World sessions only; honored at session (re)creation. Default `'disabled'` — depth is not auto-enabled, so set `'automatic'` (or `'raw'`) to turn it on. Falls back to `'disabled'` when the device doesn't support the requested mode. |
 | `lightEstimationMode` | `'disabled' \| 'ambientIntensity' \| 'environmentalHDR'` | Both modes on iOS and Android (world sessions). On Android, `environmentalHDR` does diffuse lighting (main directional light + ambient spherical harmonics); HDR cubemap reflections are not implemented yet. Applied at session (re)creation. |
 | `focusMode` | `'auto' \| 'fixed'` | |
 | `shaderMode` | `'camera' \| 'depth'` | |
@@ -344,6 +344,7 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 - [x] Background / foreground continuity
 - [x] Depth-map overlay (`debugShowDepthMap` / `shaderMode: 'depth'`)
 - [x] `isDepthModeSupported()`
+- [x] `depthMode` selection (`disabled` / `automatic` / `raw`; world sessions)
 - [x] Canonical, platform-consistent event vocabulary
 - [x] `takeSnapshot()`
 - [x] Android ARCore availability check and install/update flow in `initialize()`
@@ -352,13 +353,12 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 
 **Not yet implemented**
 
-- [ ] `depthMode` selection (depth is auto-enabled when supported; the prop value is ignored)
 - [ ] `focusMode`
 - [ ] `cameraTargetFps`
 - [ ] `cameraDepthSensorUsage`
 - [ ] Cloud anchors (`cloudAnchorMode`)
 - [ ] Instant placement (`instantPlacementMode`)
-- [ ] Geospatial mode (`isGeospatialModeSupported()`, `depthMode: 'geospatial'`)
+- [ ] Geospatial mode (`isGeospatialModeSupported()`)
 - [ ] Debug overlays: `debugShowPlanes`, `debugShowPointCloud`, `debugShowWorldOrigin`
 - [ ] Face-mesh overlay (`debugShowFaceMesh`)
 - [ ] Face-texture overlay (`faceTextureURI`)
@@ -396,7 +396,7 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 - [ ] `cameraDepthSensorUsage`
 - [ ] Cloud anchors (`cloudAnchorMode`)
 - [ ] Instant placement (`instantPlacementMode`)
-- [ ] Geospatial mode (`isGeospatialModeSupported()`, `depthMode: 'geospatial'`)
+- [ ] Geospatial mode (`isGeospatialModeSupported()`)
 - [ ] `isDepthModeSupported()` (currently returns `false`)
 - [ ] Face-mesh overlay (`debugShowFaceMesh`)
 - [ ] Face-texture overlay (`faceTextureURI`)
