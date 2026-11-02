@@ -30,8 +30,11 @@ class Texture {
   ~Texture() = default;
 
   void CreateOnGlThread();
+  // When use_raw is true the raw depth image is acquired
+  // (AR_DEPTH_MODE_RAW_DEPTH_ONLY); otherwise the smoothed/automatic one.
   void UpdateWithDepthImageOnGlThread(const ArSession& session,
-                                      const ArFrame& frame);
+                                      const ArFrame& frame,
+                                      bool use_raw = false);
   unsigned int GetTextureId() { return texture_id_; }
 
   unsigned int GetWidth() { return width_; }

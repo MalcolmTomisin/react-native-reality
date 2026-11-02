@@ -7,7 +7,7 @@ import type {
 // --- Enums ---
 
 export type ARSessionType = 'world' | 'face';
-export type ARDepthMode = 'disabled' | 'automatic' | 'raw' | 'geospatial';
+export type ARDepthMode = 'disabled' | 'automatic' | 'raw';
 export type ARLightEstimationMode =
   | 'disabled'
   | 'ambientIntensity'
