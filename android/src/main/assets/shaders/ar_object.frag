@@ -14,13 +14,21 @@
  * limitations under the License.
  */
 
-precision mediump float;
+precision highp float;
 
 uniform sampler2D u_Texture;
 
 uniform vec4 u_LightingParameters;
 uniform vec4 u_MaterialParameters;
 uniform vec4 u_ColorCorrectionParameters;
+
+// Environmental HDR lighting (ARCore world space). When u_UseHdrLighting is 1
+// the HDR path is used instead of the ambient-intensity color-correction path.
+uniform int u_UseHdrLighting;
+uniform mat4 u_ViewInverse;
+uniform vec3 u_MainLightDirection;
+uniform vec3 u_MainLightIntensity;
+uniform vec3 u_SphericalHarmonics[9];
 
 #if USE_DEPTH_FOR_OCCLUSION
 uniform sampler2D u_DepthTexture;
@@ -165,28 +173,65 @@ void main() {
     // Apply inverse SRGB gamma to the texture before making lighting calculations.
     objectColor.rgb = pow(objectColor.rgb, vec3(kInverseGamma));
 
-    // Ambient light is unaffected by the light intensity.
-    float ambient = materialAmbient;
+    if (u_UseHdrLighting == 1) {
+        // Environmental HDR: physically-based diffuse from the estimated main
+        // directional light plus ambient spherical-harmonics irradiance, both
+        // evaluated in ARCore world space.
+        vec3 worldNormal = normalize((u_ViewInverse * vec4(viewNormal, 0.0)).xyz);
 
-    // Approximate a hemisphere light (not a harsh directional light).
-    float diffuse = materialDiffuse *
-            0.5 * (dot(viewNormal, viewLightDirection) + 1.0);
+        // Ambient irradiance reconstructed from the 9 SH coefficients. These are
+        // already scaled on the CPU to fold in the SH basis constants, the
+        // cosine-lobe convolution, and the 1/pi Lambertian term.
+        vec3 ambientIrradiance =
+              u_SphericalHarmonics[0]
+            + u_SphericalHarmonics[1] * worldNormal.y
+            + u_SphericalHarmonics[2] * worldNormal.z
+            + u_SphericalHarmonics[3] * worldNormal.x
+            + u_SphericalHarmonics[4] * worldNormal.x * worldNormal.y
+            + u_SphericalHarmonics[5] * worldNormal.y * worldNormal.z
+            + u_SphericalHarmonics[6] * (3.0 * worldNormal.z * worldNormal.z - 1.0)
+            + u_SphericalHarmonics[7] * worldNormal.z * worldNormal.x
+            + u_SphericalHarmonics[8] * (worldNormal.x * worldNormal.x - worldNormal.y * worldNormal.y);
+        ambientIrradiance = max(ambientIrradiance, vec3(0.0));
 
-    // Compute specular light. Textures are loaded with with premultiplied alpha
-    // (https://developer.android.com/reference/android/graphics/BitmapFactory.Options#inPremultiplied),
-    // so premultiply the specular color by alpha as well.
-    vec3 reflectedLightDirection = reflect(viewLightDirection, viewNormal);
-    float specularStrength = max(0.0, dot(viewFragmentDirection, reflectedLightDirection));
-    float specular = objectColor.a * materialSpecular *
-            pow(specularStrength, materialSpecularPower);
+        // Main directional light (Lambertian, matched to the SH 1/pi scaling).
+        const float kPi = 3.14159265359;
+        float nDotL = max(dot(worldNormal, u_MainLightDirection), 0.0);
+        vec3 mainLight = u_MainLightIntensity * (nDotL / kPi);
 
-    vec3 color = objectColor.rgb * (ambient + diffuse) + specular;
-    // Apply SRGB gamma before writing the fragment color.
-    color.rgb = pow(color, vec3(kGamma));
-    // Apply average pixel intensity and color shift
-    color *= colorShift * (averagePixelIntensity / kMiddleGrayGamma);
-    gl_FragColor.rgb = color;
-    gl_FragColor.a = objectColor.a;
+        // ARCore returns absolute (and typically small) radiance, so apply an
+        // exposure before tone mapping to keep indoor scenes legible. Reinhard
+        // then rolls off any highlights so brighter scenes don't blow out.
+        const float kHdrExposure = 20.0;
+        vec3 linearColor =
+            objectColor.rgb * (ambientIrradiance + mainLight) * kHdrExposure;
+        vec3 toneMapped = linearColor / (linearColor + vec3(1.0));
+        gl_FragColor.rgb = pow(toneMapped, vec3(kGamma));
+        gl_FragColor.a = objectColor.a;
+    } else {
+        // Ambient light is unaffected by the light intensity.
+        float ambient = materialAmbient;
+
+        // Approximate a hemisphere light (not a harsh directional light).
+        float diffuse = materialDiffuse *
+                0.5 * (dot(viewNormal, viewLightDirection) + 1.0);
+
+        // Compute specular light. Textures are loaded with with premultiplied alpha
+        // (https://developer.android.com/reference/android/graphics/BitmapFactory.Options#inPremultiplied),
+        // so premultiply the specular color by alpha as well.
+        vec3 reflectedLightDirection = reflect(viewLightDirection, viewNormal);
+        float specularStrength = max(0.0, dot(viewFragmentDirection, reflectedLightDirection));
+        float specular = objectColor.a * materialSpecular *
+                pow(specularStrength, materialSpecularPower);
+
+        vec3 color = objectColor.rgb * (ambient + diffuse) + specular;
+        // Apply SRGB gamma before writing the fragment color.
+        color.rgb = pow(color, vec3(kGamma));
+        // Apply average pixel intensity and color shift
+        color *= colorShift * (averagePixelIntensity / kMiddleGrayGamma);
+        gl_FragColor.rgb = color;
+        gl_FragColor.a = objectColor.a;
+    }
 
 #if USE_DEPTH_FOR_OCCLUSION
     const float kMetersToMillimeters = 1000.0;

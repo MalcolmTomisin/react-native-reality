@@ -204,11 +204,12 @@ namespace arcore
                     ArConfig_setPlaneFindingMode(ArSessionManager::Instance().Get(),
                         ar_config, plane_mode);
 
-                    // Light estimation (world sessions only). environmentalHDR is
-                    // not yet implemented on Android, so it stays DISABLED.
+                    // Light estimation (world sessions only).
                     ArLightEstimationMode light_mode = AR_LIGHT_ESTIMATION_MODE_DISABLED;
                     if (light_estimation_mode_ == "ambientintensity")
                         light_mode = AR_LIGHT_ESTIMATION_MODE_AMBIENT_INTENSITY;
+                    else if (light_estimation_mode_ == "environmentalhdr")
+                        light_mode = AR_LIGHT_ESTIMATION_MODE_ENVIRONMENTAL_HDR;
                     ArConfig_setLightEstimationMode(ArSessionManager::Instance().Get(),
                         ar_config, light_mode);
                 }
@@ -423,6 +424,50 @@ namespace arcore
                         ArLightEstimate_destroy(estimate);
                     }
 
+                    // Environmental HDR: a physically-based lighting model
+                    // (main directional light + ambient spherical harmonics)
+                    // fed to the object shader. No color-correction value is
+                    // produced in this mode.
+                    bool hdr_valid = false;
+                    float hdr_light_direction[3] = {0.f, 1.f, 0.f};
+                    float hdr_light_intensity[3] = {0.f, 0.f, 0.f};
+                    float hdr_spherical_harmonics[27] = {0.f};
+                    if (light_estimation_mode_ == "environmentalhdr")
+                    {
+                        ArLightEstimate *estimate = nullptr;
+                        ArLightEstimate_create(session, &estimate);
+                        ArFrame_getLightEstimate(session, ar_frame_, estimate);
+                        ArLightEstimateState estimate_state = AR_LIGHT_ESTIMATE_STATE_NOT_VALID;
+                        ArLightEstimate_getState(session, estimate, &estimate_state);
+                        if (estimate_state == AR_LIGHT_ESTIMATE_STATE_VALID)
+                        {
+                            ArLightEstimate_getEnvironmentalHdrMainLightDirection(
+                                session, estimate, hdr_light_direction);
+                            ArLightEstimate_getEnvironmentalHdrMainLightIntensity(
+                                session, estimate, hdr_light_intensity);
+                            float sh_raw[27];
+                            ArLightEstimate_getEnvironmentalHdrAmbientSphericalHarmonics(
+                                session, estimate, sh_raw);
+                            // Fold the SH basis constants, cosine-lobe
+                            // convolution and 1/pi Lambertian term into the
+                            // coefficients (constants from the ARCore HDR
+                            // sample), so the shader just dots them with the
+                            // direction-dependent basis.
+                            static const float kShFactors[9] = {
+                                0.282095f, -0.325735f, 0.325735f, -0.325735f,
+                                0.273137f, -0.273137f, 0.078848f, -0.273137f,
+                                0.136569f};
+                            for (int i = 0; i < 9; ++i)
+                            {
+                                hdr_spherical_harmonics[3 * i + 0] = sh_raw[3 * i + 0] * kShFactors[i];
+                                hdr_spherical_harmonics[3 * i + 1] = sh_raw[3 * i + 1] * kShFactors[i];
+                                hdr_spherical_harmonics[3 * i + 2] = sh_raw[3 * i + 2] * kShFactors[i];
+                            }
+                            hdr_valid = true;
+                        }
+                        ArLightEstimate_destroy(estimate);
+                    }
+
                     std::lock_guard<std::mutex> lock(objects_mutex_);
                     for (const auto &desc : ar_object_descs_)
                     {
@@ -450,6 +495,11 @@ namespace arcore
                         {
                             uint32_t override_tex =
                                 desc.texture.empty() ? 0 : GetObjectTexture(desc.texture);
+                            if (hdr_valid)
+                                renderer_it->second->SetHdrLighting(hdr_light_direction,
+                                    hdr_light_intensity, hdr_spherical_harmonics);
+                            else
+                                renderer_it->second->ClearHdrLighting();
                             renderer_it->second->Draw(projection_mat, view_mat, model_mat,
                                                       color_correction, desc.color, override_tex);
                         }
@@ -1067,6 +1117,9 @@ namespace arcore
                             ObjRenderer *renderer = EnsureRenderer(desc.model);
                             if (renderer)
                             {
+                                // Light estimation is world-only; face filters
+                                // use the legacy path.
+                                renderer->ClearHdrLighting();
                                 float color[] = {1.f, 1.f, 1.f, 1.f};
                                 renderer->Draw(projection_mat, view_mat, model_mat, color, color);
                             }
