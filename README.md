@@ -224,7 +224,7 @@ Accepts all `ARViewProps` below plus standard `ViewProps` (e.g. `style`) and `ch
 | `sessionType` | `'world' \| 'face'` | Drives the camera (world→back, face→front). Default `'world'`. |
 | `planeDetectionMode` | `'horizontal' \| 'vertical' \| 'both' \| 'none'` | World only. |
 | `depthMode` | `'disabled' \| 'automatic' \| 'raw' \| 'geospatial'` | |
-| `lightEstimationMode` | `'disabled' \| 'ambientIntensity' \| 'environmentalHDR'` | |
+| `lightEstimationMode` | `'disabled' \| 'ambientIntensity' \| 'environmentalHDR'` | iOS: both modes. Android: `ambientIntensity` only (world sessions); `environmentalHDR` not yet implemented, treated as `disabled`. Applied at session (re)creation. |
 | `focusMode` | `'auto' \| 'fixed'` | |
 | `shaderMode` | `'camera' \| 'depth'` | |
 | `cameraFacing` | `'back' \| 'front'` | Optional override; normally inferred from `sessionType`. |
@@ -348,10 +348,11 @@ Status by platform. Items shared by both platforms (e.g. `initialize()`, geospat
 - [x] `takeSnapshot()`
 - [x] Android ARCore availability check and install/update flow in `initialize()`
 - [x] `paused` prop (pause/resume via prop)
+- [x] `lightEstimationMode`: `ambientIntensity` (world sessions; `environmentalHDR` still pending)
 
 **Not yet implemented**
 
-- [ ] `lightEstimationMode`
+- [ ] `lightEstimationMode: 'environmentalHDR'` (HDR lighting / spherical harmonics; `ambientIntensity` is implemented)
 - [ ] `depthMode` selection (depth is auto-enabled when supported; the prop value is ignored)
 - [ ] `focusMode`
 - [ ] `cameraTargetFps`

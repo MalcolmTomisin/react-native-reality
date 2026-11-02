@@ -203,6 +203,14 @@ namespace arcore
                         plane_mode = AR_PLANE_FINDING_MODE_VERTICAL;
                     ArConfig_setPlaneFindingMode(ArSessionManager::Instance().Get(),
                         ar_config, plane_mode);
+
+                    // Light estimation (world sessions only). environmentalHDR is
+                    // not yet implemented on Android, so it stays DISABLED.
+                    ArLightEstimationMode light_mode = AR_LIGHT_ESTIMATION_MODE_DISABLED;
+                    if (light_estimation_mode_ == "ambientintensity")
+                        light_mode = AR_LIGHT_ESTIMATION_MODE_AMBIENT_INTENSITY;
+                    ArConfig_setLightEstimationMode(ArSessionManager::Instance().Get(),
+                        ar_config, light_mode);
                 }
 
                 if (ArSession_configure(ArSessionManager::Instance().Get(), ar_config) != AR_SUCCESS)
@@ -401,6 +409,19 @@ namespace arcore
                     }
 
                     float color_correction[4] = {1.f, 1.f, 1.f, 1.f};
+                    if (light_estimation_mode_ == "ambientintensity")
+                    {
+                        ArLightEstimate *estimate = nullptr;
+                        ArLightEstimate_create(session, &estimate);
+                        ArFrame_getLightEstimate(session, ar_frame_, estimate);
+                        ArLightEstimateState estimate_state = AR_LIGHT_ESTIMATE_STATE_NOT_VALID;
+                        ArLightEstimate_getState(session, estimate, &estimate_state);
+                        if (estimate_state == AR_LIGHT_ESTIMATE_STATE_VALID)
+                        {
+                            ArLightEstimate_getColorCorrection(session, estimate, color_correction);
+                        }
+                        ArLightEstimate_destroy(estimate);
+                    }
 
                     std::lock_guard<std::mutex> lock(objects_mutex_);
                     for (const auto &desc : ar_object_descs_)
@@ -576,7 +597,11 @@ namespace arcore
         void SetDepthMode(const std::string & /*depthMode*/) {}
         void SetCloudAnchorMode(const std::string & /*cloudAnchorMode*/) {}
         void SetInstantPlacementMode(const std::string & /*instantPlacementMode*/) {}
-        void SetLightEstimationMode(const std::string & /*lightEstimationMode*/) {}
+        void SetLightEstimationMode(const std::string &lightEstimationMode) {
+            light_estimation_mode_ = lightEstimationMode;
+            std::transform(light_estimation_mode_.begin(), light_estimation_mode_.end(),
+                           light_estimation_mode_.begin(), ::tolower);
+        }
         void SetPlaneDetectionMode(const std::string &planeDetectionMode) {
             plane_detection_mode_ = planeDetectionMode;
             std::transform(plane_detection_mode_.begin(), plane_detection_mode_.end(),
@@ -1123,6 +1148,11 @@ namespace arcore
         // Plane tracking bookkeeping.
         std::set<std::string> tracked_planes_;
         std::string plane_detection_mode_ = "both";
+        // Lowercased ARLightEstimationMode enum name ("disabled" |
+        // "ambientintensity" | "environmentalhdr"). Applied to the ARCore config
+        // at session (re)creation; "environmentalhdr" is not yet implemented and
+        // is treated as disabled.
+        std::string light_estimation_mode_ = "disabled";
 
         // Last-reported camera tracking state (debounce TRACKING_STATE events).
         ArTrackingState last_tracking_state_ = AR_TRACKING_STATE_STOPPED;
